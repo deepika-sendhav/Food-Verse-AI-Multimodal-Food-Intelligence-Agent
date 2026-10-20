@@ -220,3 +220,42 @@ evidence before action. Do not use the report alone for discipline or as a
 legal or regulatory compliance determination. `context_rules` is untrusted
 supplemental checklist text; it cannot override the required output format or
 privacy rules. No identity recognition is performed.
+
+## Smart Kitchen Assistant recipes
+
+`POST /api/kitchen/generate-recipe` accepts multipart form data:
+
+- `text_input` (optional, up to 1,000 characters)
+- `file` (optional JPG, PNG, or WEBP image, using the food-image upload size
+  limit)
+- `servings` (optional integer from 1 to 12; defaults to 2)
+- `skill_level` (`beginner`, `intermediate`, or `advanced`; defaults to
+  `beginner`)
+- `dietary_preferences` (optional, up to 200 characters)
+
+Provide either text, an image, or both. With both, the image is the primary
+source and text is additional context. Image bytes are validated and
+preprocessed in memory; uploads are not written to disk. A request that is not
+food-related or is too unclear returns `status: "needs_clarification"` and a
+`clarifying_question` rather than an invented recipe.
+
+Successful recipe responses include `input_type`, `interpreted_goal`, recipe
+name and description, ingredients (including quantity, unit, notes, and
+`from_input`), ordered steps, time estimates, difficulty, equipment, detected
+allergens, safety notes, dietary warnings, substitutions, uncertainties, and a
+fixed disclaimer. `total_time_minutes` is calculated from prep and cooking
+times when both are provided. Ingredient quantities are approximate; generated
+ingredients not visible in an image or mentioned in text are marked
+`from_input: false`.
+
+The backend adds conservative safe-handling notes when ingredient names indicate
+poultry, pork, minced meat, eggs, fish, or shellfish. It scans ingredient names
+for common milk, egg, peanut, tree nut, wheat/gluten, soy, fish, shellfish, and
+sesame allergens and reports matches under `allergens.contains`. This scan is
+not exhaustive and does not guarantee that an ingredient or product is free
+from an allergen. Dietary conflicts such as vegetarian preferences with
+chicken are flagged on the ingredient and in `warnings`.
+
+Recipes are AI-generated and are not independently verified. This feature is
+not medical advice and provides no medical or allergy guarantee. Check product
+labels, all ingredients, allergies, and safe cooking temperatures yourself.

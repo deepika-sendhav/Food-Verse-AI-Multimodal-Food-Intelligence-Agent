@@ -280,3 +280,103 @@ class HygieneAnalysisResponse(BaseModel):
     frames_skipped: list[HygieneFrameSkipped] = Field(default_factory=list)
     frames_failed: list[HygieneFrameFailed] = Field(default_factory=list)
     disclaimers: list[str] = Field(default_factory=list)
+
+
+RecipeInputType = Literal["image", "text", "image_and_text"]
+RecipeStatus = Literal["ok", "needs_clarification"]
+RecipeSkillLevel = Literal["beginner", "intermediate", "advanced"]
+RecipeActionType = Literal[
+    "prep",
+    "chop",
+    "heat",
+    "mix",
+    "cook",
+    "rest",
+    "serve",
+    "other",
+]
+RecipeHeatLevel = Literal["low", "medium", "high"]
+
+
+class RecipeIngredient(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    quantity: float | None = Field(default=None, ge=0, le=100_000, allow_inf_nan=False)
+    unit: str | None = Field(default=None, max_length=40)
+    notes: str | None = Field(default=None, max_length=250)
+    from_input: bool
+    dietary_conflict: bool = False
+
+
+class RecipeStep(BaseModel):
+    step_number: int = Field(ge=1, le=100)
+    instruction: str = Field(min_length=1, max_length=500)
+    action_type: RecipeActionType
+    duration_minutes: float | None = Field(
+        default=None,
+        ge=0,
+        le=1440,
+        allow_inf_nan=False,
+    )
+    heat_level: RecipeHeatLevel | None = None
+    tip: str | None = Field(default=None, max_length=300)
+
+
+class RecipeModelResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    status: RecipeStatus
+    interpreted_goal: str = Field(min_length=1, max_length=300)
+    clarifying_question: str | None = Field(default=None, max_length=300)
+    dish_name: str | None = Field(default=None, max_length=150)
+    cuisine: str | None = Field(default=None, max_length=100)
+    description: str | None = Field(default=None, max_length=500)
+    ingredients: list[RecipeIngredient] = Field(default_factory=list, max_length=50)
+    steps: list[RecipeStep] = Field(default_factory=list, max_length=50)
+    prep_time_minutes: float | None = Field(default=None, ge=0, le=1440, allow_inf_nan=False)
+    cook_time_minutes: float | None = Field(default=None, ge=0, le=1440, allow_inf_nan=False)
+    difficulty: RecipeSkillLevel | None = None
+    equipment: list[str] = Field(default_factory=list, max_length=30)
+    safety_notes: list[str] = Field(default_factory=list, max_length=30)
+    substitutions: list[str] = Field(default_factory=list, max_length=30)
+    uncertainties: list[str] = Field(default_factory=list, max_length=30)
+
+class RecipeAllergens(BaseModel):
+    contains: list[
+        Literal[
+            "milk",
+            "egg",
+            "peanut",
+            "tree nuts",
+            "wheat/gluten",
+            "soy",
+            "fish",
+            "shellfish",
+            "sesame",
+        ]
+    ] = Field(default_factory=list)
+
+
+class RecipeGenerationResponse(BaseModel):
+    success: bool
+    status: RecipeStatus
+    input_type: RecipeInputType
+    interpreted_goal: str
+    clarifying_question: str | None = None
+    dish_name: str | None = None
+    cuisine: str | None = None
+    description: str | None = None
+    servings: int = Field(ge=1, le=12)
+    skill_level: RecipeSkillLevel
+    ingredients: list[RecipeIngredient] = Field(default_factory=list)
+    steps: list[RecipeStep] = Field(default_factory=list)
+    prep_time_minutes: float | None = Field(default=None, ge=0, allow_inf_nan=False)
+    cook_time_minutes: float | None = Field(default=None, ge=0, allow_inf_nan=False)
+    total_time_minutes: float | None = Field(default=None, ge=0, allow_inf_nan=False)
+    difficulty: RecipeSkillLevel | None = None
+    equipment: list[str] = Field(default_factory=list)
+    allergens: RecipeAllergens
+    safety_notes: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    substitutions: list[str] = Field(default_factory=list)
+    uncertainties: list[str] = Field(default_factory=list)
+    disclaimers: list[str] = Field(default_factory=list)
