@@ -110,3 +110,42 @@ The `FreshnessFeatures` response has `feature_version`, `color`,
 dominant-color percentages. These features are visual heuristics, not proof of
 spoilage or food safety. Lighting, camera characteristics, and natural food
 color (for example, ripe bananas or dark foods) affect them.
+
+## Freshness classification and safety recommendations
+
+`POST /api/freshness/analyze` accepts a JPG, PNG, or WEBP image in the multipart
+`file` field, plus optional `storage_time` and `storage_type` form fields. It
+uses the same upload validation and size limit as `/api/freshness/features`.
+The API first extracts the existing image features, computes a rule-based
+score, then asks the configured Groq vision model for a separate visual
+assessment using the image, measured features, and any supplied storage
+context. Code combines these results; the model does not choose the final
+verdict or return confidence. If the vision service times out, is unavailable,
+or returns invalid JSON, the endpoint still returns a rules-only estimate and
+records the skipped model assessment in `uncertainties`.
+
+The feature-based score starts at 100 and applies documented penalties for
+yellow/brown and dark discoloration, mold-like surface patterns, low smoothness,
+low color consistency, and image-quality flags. Scores map to levels as
+follows: 70–100 is `fresh`, 40–69 is `moderately_fresh`, and below 40 is
+`spoiled`. A model and rule agreement supports a stronger confidence estimate;
+a one-level disagreement lowers confidence and chooses the more cautious
+(less-fresh) level. A two-level disagreement, or an uncertain model assessment,
+produces `uncertain`, except a mold-like fraction of at least 1% leads to the
+more cautious `spoiled` result. Poor lighting, blur, and low contrast lower
+confidence. Confidence is computed by the backend and capped at 90.
+
+| Final level | Safety status | Recommendation |
+| --- | --- | --- |
+| `fresh` | Likely safe | Store properly and consume within the usual time. |
+| `moderately_fresh` | Consume soon | Use today or cook thoroughly; check smell and texture. |
+| `spoiled` | Unsafe | Discard it; do not taste it to test. |
+| `uncertain` | Cannot determine | Retake a clearer photo and check smell, texture, and date. |
+
+Reported room-temperature storage exceeding two hours and recognized rice,
+meat, fish, or dairy item names can add extra safety warnings. The fixed
+disclaimer is: “This is a visual estimate, not a food safety guarantee. When
+in doubt, throw it out.” Freshness classification is a visual estimate, not a
+food safety test; one image cannot establish smell, internal condition,
+temperature history, or pathogen presence. Follow food-safety guidance and
+discard food when there is doubt.

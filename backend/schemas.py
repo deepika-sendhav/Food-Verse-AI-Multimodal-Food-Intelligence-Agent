@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
@@ -141,3 +143,31 @@ class FreshnessFeatures(BaseModel):
     surface_patterns: SurfacePatternFeatures
     quality_flags: QualityFlags
     warnings: list[str] = Field(default_factory=list)
+
+
+class FreshnessRuleAssessment(BaseModel):
+    score: float = Field(ge=0, le=100, allow_inf_nan=False)
+    signals: list[str] = Field(default_factory=list)
+
+
+class FreshnessAnalysisResponse(BaseModel):
+    success: bool
+    item_name: str | None = None
+    freshness_level: Literal[
+        "fresh",
+        "moderately_fresh",
+        "spoiled",
+        "uncertain",
+    ]
+    confidence: float = Field(ge=0, le=100, allow_inf_nan=False)
+    safety_status: str
+    detected_signs: list[str] = Field(default_factory=list)
+    reasoning: str
+    recommendation: str
+    safety_warnings: list[str] = Field(default_factory=list)
+    safety_disclaimer: str
+    rule_assessment: FreshnessRuleAssessment
+    features: FreshnessFeatures
+    uncertainties: list[str] = Field(default_factory=list)
+    color: Literal["green", "amber", "red", "gray"]
+    alert_level: Literal["none", "info", "warning", "critical"]
