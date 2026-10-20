@@ -1,0 +1,79 @@
+from fastapi import APIRouter, File, HTTPException, UploadFile
+
+from backend.config import MAX_UPLOAD_SIZE_BYTES
+from backend.schemas import FoodAnalysisResponse
+from backend.services.food_classifier import (
+    ModelResponseError,
+    ModelTimeoutError,
+    ModelUnavailableError,
+    classify_food,
+)
+from backend.services.image_processing import InvalidImageError, preprocess_image
+
+router = APIRouter(prefix="/api/food-recognition", tags=["food recognition"])
+
+ALLOWED_UPLOADS = {
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".webp": "image/webp",
+}
+
+
+@router.post("/analyze", response_model=FoodAnalysisResponse)
+async def analyze_food_image(file: UploadFile = File(...)) -> FoodAnalysisResponse:
+    try:
+        suffix = ""
+        if file.filename:
+            suffix = file.filename.rsplit(".", 1)[-1].lower()
+            suffix = f".{suffix}" if "." in file.filename else ""
+        expected_content_type = ALLOWED_UPLOADS.get(suffix)
+        content_type = (file.content_type or "").split(";", 1)[0].strip().lower()
+        if expected_content_type is None or content_type != expected_content_type:
+            raise HTTPException(
+                status_code=415,
+                detail="Upload a JPG, PNG, or WEBP image with a matching image MIME type.",
+            )
+
+        image_bytes = await file.read(MAX_UPLOAD_SIZE_BYTES + 1)
+        if not image_bytes:
+            raise HTTPException(status_code=400, detail="The uploaded image is empty.")
+        if len(image_bytes) > MAX_UPLOAD_SIZE_BYTES:
+            raise HTTPException(status_code=413, detail="The uploaded image exceeds the size limit.")
+
+        try:
+            processed_image = preprocess_image(image_bytes)
+        except InvalidImageError as exc:
+            raise HTTPException(
+                status_code=422,
+                detail="The upload is not a valid, supported image.",
+            ) from exc
+
+        try:
+            result = await classify_food(processed_image)
+        except ModelTimeoutError as exc:
+            raise HTTPException(
+                status_code=504,
+                detail="The food vision service timed out. Please try again.",
+            ) from exc
+        except ModelUnavailableError as exc:
+            raise HTTPException(
+                status_code=503,
+                detail="The food vision service is unavailable or not configured.",
+            ) from exc
+        except ModelResponseError as exc:
+            raise HTTPException(
+                status_code=502,
+                detail="The food vision service returned an invalid response.",
+            ) from exc
+
+        return FoodAnalysisResponse(
+            success=True,
+            dish_name=result.dish_name,
+            detected_items=result.detected_items,
+            confidence=None,
+            description=result.description,
+            uncertainties=result.uncertainties,
+        )
+    finally:
+        await file.close()
