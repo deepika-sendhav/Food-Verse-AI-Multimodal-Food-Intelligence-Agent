@@ -74,3 +74,39 @@ Example response shape:
   "alternatives": ["..."]
 }
 ```
+
+## Freshness image features
+
+`POST /api/freshness/features` accepts an image in the multipart `file` field.
+It reuses the safe Pillow image decoder, EXIF correction, maximum pixel limit,
+and resize path. It then applies OpenCV colored noise reduction and CLAHE
+lighting normalization to the LAB lightness channel. This endpoint only
+measures image features; it does not classify freshness or call an LLM.
+
+The `FreshnessFeatures` response has `feature_version`, `color`,
+`dark_discoloration_fraction`, `yellow_brown_fraction`, `texture`,
+`surface_patterns`, `quality_flags`, and `warnings`.
+
+| Feature | Range | Computation |
+| --- | --- | --- |
+| `color.mean_h`, `color.std_h` | H: 0–179; std: 0–90 | Mean and population standard deviation of OpenCV HSV hue. |
+| `color.mean_s`, `color.mean_v` | 0–255 | Mean HSV saturation and value. |
+| `color.std_s`, `color.std_v` | 0–127.5 | Population standard deviation of HSV saturation and value. |
+| `color.dominant_colors` | RGB channels: 0–255; percentage: 0–100 | Three k-means clusters in RGB with each cluster's pixel share. Percentages sum to approximately 100. |
+| `color.consistency_score` | 0–1 | One minus the mean normalized hue and saturation spread; higher means more consistent color. |
+| `dark_discoloration_fraction` | 0–1 | Fraction of normalized HSV pixels in dark range H 0–179, S 0–255, V 0–55. |
+| `yellow_brown_fraction` | 0–1 | Fraction of normalized HSV pixels in either brown range H 5–25, S 45–255, V 20–190 or yellow range H 20–40, S 45–255, V 80–255. |
+| `texture.laplacian_variance` | 0–1,000,000,000 | Variance of the grayscale Laplacian; higher often means more high-frequency detail. |
+| `texture.local_standard_deviation` | 0–127.5 | Mean grayscale standard deviation in 7×7 neighborhoods. |
+| `texture.smoothness_score` | 0–1 | One minus local standard deviation divided by 127.5; higher indicates locally smoother pixels. |
+| `surface_patterns.edge_density` | 0–1 | Fraction of Canny edge pixels, with thresholds 100 and 200. |
+| `surface_patterns.mold_like_pattern_fraction` | 0–1 | Fraction of image area from small irregular contours within white/gray (S 0–70, V 80–255) or green-blue (H 35–100, S 20–255, V 25–200) HSV candidate masks. |
+| `quality_flags.too_dark` | Boolean | True if mean normalized HSV value is below 50. |
+| `quality_flags.too_bright` | Boolean | True if mean normalized HSV value is above 220. |
+| `quality_flags.blurry` | Boolean | True if grayscale Laplacian variance is below 20. |
+| `quality_flags.low_contrast` | Boolean | True if grayscale standard deviation is below 15. |
+
+`validate_features()` checks finite numeric values, documented ranges, and
+dominant-color percentages. These features are visual heuristics, not proof of
+spoilage or food safety. Lighting, camera characteristics, and natural food
+color (for example, ripe bananas or dark foods) affect them.

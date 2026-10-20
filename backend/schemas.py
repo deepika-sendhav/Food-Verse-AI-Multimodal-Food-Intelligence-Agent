@@ -94,3 +94,50 @@ class FoodAnalysisResponse(BaseModel):
     reasoning: str
     insights: list[str] = Field(default_factory=list)
     alternatives: list[str] = Field(default_factory=list)
+
+
+class DominantColor(BaseModel):
+    red: float = Field(ge=0, le=255, allow_inf_nan=False)
+    green: float = Field(ge=0, le=255, allow_inf_nan=False)
+    blue: float = Field(ge=0, le=255, allow_inf_nan=False)
+    percentage: float = Field(ge=0, le=100, allow_inf_nan=False)
+
+
+class ColorFeatures(BaseModel):
+    mean_h: float = Field(ge=0, le=179, allow_inf_nan=False)
+    std_h: float = Field(ge=0, le=90, allow_inf_nan=False)
+    mean_s: float = Field(ge=0, le=255, allow_inf_nan=False)
+    std_s: float = Field(ge=0, le=127.5, allow_inf_nan=False)
+    mean_v: float = Field(ge=0, le=255, allow_inf_nan=False)
+    std_v: float = Field(ge=0, le=127.5, allow_inf_nan=False)
+    dominant_colors: list[DominantColor] = Field(min_length=1, max_length=3)
+    consistency_score: float = Field(ge=0, le=1, allow_inf_nan=False)
+
+
+class TextureFeatures(BaseModel):
+    laplacian_variance: float = Field(ge=0, le=1_000_000_000, allow_inf_nan=False)
+    local_standard_deviation: float = Field(ge=0, le=127.5, allow_inf_nan=False)
+    smoothness_score: float = Field(ge=0, le=1, allow_inf_nan=False)
+
+
+class SurfacePatternFeatures(BaseModel):
+    edge_density: float = Field(ge=0, le=1, allow_inf_nan=False)
+    mold_like_pattern_fraction: float = Field(ge=0, le=1, allow_inf_nan=False)
+
+
+class QualityFlags(BaseModel):
+    too_dark: bool
+    too_bright: bool
+    blurry: bool
+    low_contrast: bool
+
+
+class FreshnessFeatures(BaseModel):
+    feature_version: str = Field(min_length=1)
+    color: ColorFeatures
+    dark_discoloration_fraction: float = Field(ge=0, le=1, allow_inf_nan=False)
+    yellow_brown_fraction: float = Field(ge=0, le=1, allow_inf_nan=False)
+    texture: TextureFeatures
+    surface_patterns: SurfacePatternFeatures
+    quality_flags: QualityFlags
+    warnings: list[str] = Field(default_factory=list)

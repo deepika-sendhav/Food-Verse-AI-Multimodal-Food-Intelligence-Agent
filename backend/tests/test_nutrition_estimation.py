@@ -41,6 +41,45 @@ def test_local_reference_scales_values_to_documented_serving(monkeypatch):
     assert any("assumption" in item for item in nutrition.uncertainties)
 
 
+def test_missing_dish_name_uses_local_reference_for_single_detected_item(monkeypatch):
+    monkeypatch.setattr(nutrition_estimation, "USDA_FDC_API_KEY", "")
+
+    async def unexpected_usda_lookup(_query):
+        raise AssertionError("A local match should be used before USDA.")
+
+    monkeypatch.setattr(nutrition_estimation, "_fetch_usda_food", unexpected_usda_lookup)
+
+    nutrition, score, *_ = asyncio.run(estimate_nutrition(None, ["banana"]))
+
+    assert nutrition.calories_kcal == 105
+    assert nutrition.source.startswith("Local nutrition reference")
+    assert score is not None
+    assert any("dish name was missing" in note for note in nutrition.uncertainties)
+
+
+def test_missing_dish_name_and_items_returns_could_not_identify_result():
+    nutrition, score, *_ = asyncio.run(estimate_nutrition(None, []))
+
+    assert nutrition.calories_kcal is None
+    assert nutrition.serving_description == (
+        "Not available: the food could not be identified."
+    )
+    assert score is None
+
+
+def test_missing_dish_name_with_multiple_items_uses_per_item_fallback(monkeypatch):
+    monkeypatch.setattr(nutrition_estimation, "USDA_FDC_API_KEY", "")
+
+    nutrition, score, *_ = asyncio.run(
+        estimate_nutrition(None, ["banana", "rice"])
+    )
+
+    assert nutrition.calories_kcal is not None
+    assert score is not None
+    assert any("banana, rice" in note for note in nutrition.uncertainties)
+    assert any("dish name was missing" in note for note in nutrition.uncertainties)
+
+
 def test_user_serving_weight_overrides_default(monkeypatch):
     monkeypatch.setattr(nutrition_estimation, "USDA_FDC_API_KEY", "")
 
@@ -54,51 +93,65 @@ def test_user_serving_weight_overrides_default(monkeypatch):
     assert "user-supplied" in nutrition.serving_description
 
 
-def test_uses_usda_reference_before_local_fallback(monkeypatch):
+def test_local_food_match_skips_usda_lookup(monkeypatch):
     monkeypatch.setattr(nutrition_estimation, "USDA_FDC_API_KEY", "test-key")
 
-    class FakeAsyncClient:
-        def __init__(self, **_kwargs):
-            pass
+    async def unexpected_usda_lookup(_query):
+        raise AssertionError("Exact local match should avoid USDA.")
 
-        async def __aenter__(self):
-            return self
+    monkeypatch.setattr(nutrition_estimation, "_fetch_usda_food_records", unexpected_usda_lookup)
 
-        async def __aexit__(self, *_args):
-            return False
-
-        async def get(self, _url, params):
-            assert params["api_key"] == "test-key"
-            return SimpleNamespace(
-                raise_for_status=lambda: None,
-                json=lambda: {
-                    "foods": [
-                        {
-                            "description": "Rice, cooked",
-                            "dataType": "SR Legacy",
-                            "foodNutrients": [
-                                {"nutrientId": 1008, "unitName": "KCAL", "value": 130},
-                                {"nutrientId": 1003, "unitName": "G", "value": 2.7},
-                                {"nutrientId": 1005, "unitName": "G", "value": 28.2},
-                                {"nutrientId": 1004, "unitName": "G", "value": 0.3},
-                                {"nutrientId": 1079, "unitName": "G", "value": 0.4},
-                                {"nutrientId": 2000, "unitName": "G", "value": 0.1},
-                            ],
-                        }
-                    ]
-                },
-            )
-
-    monkeypatch.setattr(nutrition_estimation.httpx, "AsyncClient", FakeAsyncClient)
-
-    nutrition, score, _label, _reasoning, _insights, _alternatives = asyncio.run(
-        estimate_nutrition("rice", [], serving_size_g=100)
+    nutrition, score, *_ = asyncio.run(
+        estimate_nutrition("banana", [], serving_size_g=100)
     )
 
-    assert nutrition.source.startswith("USDA FoodData Central")
-    assert nutrition.calories_kcal == 130
-    assert nutrition.fiber_g == 0.4
+    assert nutrition.source.startswith("Local nutrition reference")
+    assert nutrition.calories_kcal == 89
     assert score is not None
+
+
+def test_usda_rejects_dehydrated_banana_product_for_banana_search(monkeypatch):
+    async def dehydrated_product(_query):
+        description = "Bananas, dehydrated, or banana powder"
+        return [
+            (
+                description,
+                nutrition_estimation._usda_nutrients(usda_food(description, 346)),
+                "SR Legacy",
+            )
+        ]
+
+    monkeypatch.setattr(
+        nutrition_estimation,
+        "_fetch_usda_food_records",
+        dehydrated_product,
+    )
+
+    assert asyncio.run(nutrition_estimation._fetch_usda_food("banana")) is None
+
+
+def test_usda_accepts_dried_food_when_search_name_says_dried(monkeypatch):
+    async def dried_banana(_query):
+        description = "Bananas, dried"
+        return [
+            (
+                description,
+                nutrition_estimation._usda_nutrients(usda_food(description, 346)),
+                "SR Legacy",
+            )
+        ]
+
+    monkeypatch.setattr(
+        nutrition_estimation,
+        "_fetch_usda_food_records",
+        dried_banana,
+    )
+
+    match = asyncio.run(nutrition_estimation._fetch_usda_food("dried banana"))
+
+    assert match is not None
+    assert match[0] == "Bananas, dried"
+    assert match[1]["calories_kcal"] == 346
 
 
 def test_combination_dish_skips_whole_dish_usda_lookup(monkeypatch):
@@ -193,6 +246,94 @@ def test_accepts_clean_whole_dish_usda_match(monkeypatch):
     assert nutrition.source.startswith("USDA FoodData Central")
     assert score is not None
     assert not any("Rejected USDA" in item for item in nutrition.uncertainties)
+
+
+def test_rejects_unreported_qualifier_in_whole_dish_description(monkeypatch):
+    monkeypatch.setattr(nutrition_estimation, "USDA_FDC_API_KEY", "test-key")
+    description = "Fruit salad with mayonnaise"
+
+    async def fake_usda_records(_query):
+        return [(description, nutrition_estimation._usda_nutrients(usda_food(description, 250)), "SR Legacy")]
+
+    async def no_item_match(_query):
+        return None
+
+    monkeypatch.setattr(
+        nutrition_estimation,
+        "_fetch_usda_food_records",
+        fake_usda_records,
+    )
+    monkeypatch.setattr(nutrition_estimation, "_fetch_usda_food", no_item_match)
+    monkeypatch.setattr(
+        nutrition_estimation,
+        "_fetch_primary_usda_food",
+        no_item_match,
+    )
+
+    nutrition, score, *_ = asyncio.run(
+        estimate_nutrition("fruit salad", ["watermelon", "grapes"])
+    )
+
+    assert nutrition.calories_kcal is None
+    assert score is None
+    assert any(
+        "Fruit salad with mayonnaise" in uncertainty
+        and "mayonnaise" in uncertainty
+        for uncertainty in nutrition.uncertainties
+    )
+
+
+def test_mixed_fruit_rejection_looks_up_each_item_in_primary_usda_data(
+    monkeypatch,
+):
+    monkeypatch.setattr(nutrition_estimation, "USDA_FDC_API_KEY", "test-key")
+    searched_queries = []
+    requested_data_types = []
+
+    class FakeAsyncClient:
+        def __init__(self, **_kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return False
+
+        async def get(self, _url, params):
+            query = params["query"]
+            data_types = params["dataType"]
+            searched_queries.append(query)
+            requested_data_types.append(set(data_types))
+            if query == "mixed fruit salad":
+                description = "Fruit salad with salad dressing"
+                record = usda_food(description, 200)
+                record["dataType"] = "Survey (FNDDS)"
+            else:
+                description = f"{query.title()}, raw"
+                record = usda_food(description, 50)
+                record["dataType"] = "Foundation"
+            return SimpleNamespace(
+                raise_for_status=lambda: None,
+                json=lambda: {"foods": [record]},
+            )
+
+    monkeypatch.setattr(nutrition_estimation.httpx, "AsyncClient", FakeAsyncClient)
+    items = ["watermelon", "pineapple", "grapes", "kiwi", "cantaloupe"]
+
+    nutrition, score, *_ = asyncio.run(
+        estimate_nutrition("mixed fruit salad", items)
+    )
+
+    assert searched_queries[0] == "mixed fruit salad"
+    assert searched_queries[1:] == items
+    assert all(
+        data_types == {"Foundation", "SR Legacy"}
+        for data_types in requested_data_types[1:]
+    )
+    assert nutrition.calories_kcal is not None
+    assert score is not None
+    assert any("salad dressing" in uncertainty for uncertainty in nutrition.uncertainties)
 
 
 def test_usda_network_error_falls_back_to_local_reference(monkeypatch):

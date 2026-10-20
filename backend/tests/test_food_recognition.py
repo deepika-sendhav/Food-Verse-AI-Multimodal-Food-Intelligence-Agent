@@ -100,6 +100,8 @@ def test_valid_food_image_is_classified(monkeypatch):
     assert "list side garnishes such as chili, lime, onion, and cilantro as separate items" in prompt
     assert "lime, onion, and cilantro" in prompt
     assert "never include utensils, plates, bowls" in prompt
+    assert 'if the image shows a single food item, set dish_name to that item\'s simple name' in prompt
+    assert 'for example, "banana"' in prompt
 
 
 def test_detected_items_excludes_tableware_and_other_objects(monkeypatch):

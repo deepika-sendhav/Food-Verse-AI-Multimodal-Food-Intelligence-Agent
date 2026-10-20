@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import re
-from typing import Any
+from typing import Any, Awaitable, Callable
 
 import httpx
 
@@ -27,6 +27,29 @@ GARNISH_ITEMS = {
 }
 ALLOWED_USDA_DATA_TYPES = {"Foundation", "SR Legacy", "Survey (FNDDS)"}
 USDA_PREPARATION_TERMS = {"soup", "canned", "frozen", "mix", "instant"}
+USDA_ALWAYS_REJECT_TERMS = {
+    "dehydrated",
+    "dried",
+    "powder",
+    "canned",
+    "syrup",
+    "frozen",
+    "mix",
+    "instant",
+    "babyfood",
+    "juice",
+}
+USDA_QUALIFIER_TERMS = {
+    "salad dressing",
+    "mayonnaise",
+    "creamy",
+    "fried",
+    "breaded",
+    "candied",
+    "canned",
+    "in syrup",
+}
+PRIMARY_USDA_DATA_TYPES = {"Foundation", "SR Legacy"}
 MEANINGLESS_MATCH_WORDS = {
     "a",
     "and",
@@ -35,6 +58,26 @@ MEANINGLESS_MATCH_WORDS = {
     "of",
     "the",
     "with",
+}
+USDA_DESCRIPTION_WORDS = {
+    "and",
+    "as",
+    "boiled",
+    "chopped",
+    "cooked",
+    "dehydrated",
+    "dried",
+    "fresh",
+    "frozen",
+    "in",
+    "juice",
+    "or",
+    "powder",
+    "prepared",
+    "raw",
+    "sliced",
+    "meatless",
+    "whole",
 }
 NUTRIENT_FIELDS = (
     "calories_kcal",
@@ -58,6 +101,14 @@ FDC_NUTRIENT_IDS = {
 
 def _normalize_name(name: str) -> str:
     return re.sub(r"[^a-z0-9]+", " ", name.casefold()).strip()
+
+
+def _food_words(name: str) -> set[str]:
+    words = re.findall(r"[a-z0-9]+", name.casefold())
+    return {
+        word[:-1] if len(word) > 3 and word.endswith("s") and not word.endswith("ss") else word
+        for word in words
+    }
 
 
 def _find_local_food(name: str) -> tuple[str, dict[str, Any]] | None:
@@ -217,7 +268,14 @@ def _unavailable_multi_item_result(
 async def _estimate_from_detected_items(
     detected_items: list[str],
     serving_size_g: float | None,
+    usda_lookup: Callable[
+        [str],
+        Awaitable[tuple[str, dict[str, float | None]] | None],
+    ]
+    | None = None,
 ) -> tuple[NutritionInfo, int | None, str | None, str, list[str], list[str]]:
+    item_usda_lookup = usda_lookup or _fetch_usda_food
+
     async def find_item_reference(
         item_name: str,
     ) -> tuple[str, dict[str, Any], float, str] | None:
@@ -233,7 +291,7 @@ async def _estimate_from_detected_items(
                 reference_name,
             )
 
-        usda_result = await _fetch_usda_food(item_name)
+        usda_result = await item_usda_lookup(item_name)
         if usda_result is not None:
             reference_name, per_100_g = usda_result
             return "usda", per_100_g, 100.0, reference_name
@@ -412,21 +470,22 @@ async def _fetch_usda_food(
 ) -> tuple[str, dict[str, float | None]] | None:
     records = await _fetch_usda_food_records(query)
     for description, nutrients, data_type in records:
-        if data_type in ALLOWED_USDA_DATA_TYPES:
+        if _usda_description_rejection_reason(query, description, data_type) is None:
             return description, nutrients
     return None
 
 
 async def _fetch_usda_food_records(
     query: str,
+    data_types: set[str] | None = None,
 ) -> list[tuple[str, dict[str, float | None], str | None]]:
     if not USDA_FDC_API_KEY:
         return []
-    params = {
+    params: dict[str, Any] = {
         "api_key": USDA_FDC_API_KEY,
         "query": query,
         "pageSize": 10,
-        "dataType": ["Foundation", "SR Legacy", "Survey (FNDDS)"],
+        "dataType": sorted(data_types or ALLOWED_USDA_DATA_TYPES),
     }
     try:
         async with httpx.AsyncClient(timeout=FDC_TIMEOUT_SECONDS) as client:
@@ -460,31 +519,98 @@ async def _fetch_usda_food_records(
     return records
 
 
-def _whole_dish_usda_rejection_reason(
-    dish_name: str,
+async def _fetch_primary_usda_food(
+    query: str,
+) -> tuple[str, dict[str, float | None]] | None:
+    records = await _fetch_usda_food_records(query, PRIMARY_USDA_DATA_TYPES)
+    for description, nutrients, data_type in records:
+        if (
+            data_type in PRIMARY_USDA_DATA_TYPES
+            and _usda_description_rejection_reason(query, description, data_type)
+            is None
+        ):
+            return description, nutrients
+    return None
+
+
+def _usda_description_rejection_reason(
+    searched_name: str,
     description: str,
     data_type: str | None,
 ) -> str | None:
     if data_type not in ALLOWED_USDA_DATA_TYPES:
         return f"unsupported USDA data type {data_type!r}"
 
-    dish_words = set(re.findall(r"[a-z0-9]+", dish_name.casefold()))
-    description_words = set(re.findall(r"[a-z0-9]+", description.casefold()))
-    meaningful_words = dish_words - MEANINGLESS_MATCH_WORDS
-    if not meaningful_words.intersection(description_words):
-        return "the description shares no meaningful word with the dish name"
+    searched_words = _food_words(searched_name)
+    description_words = _food_words(description)
+    if not (searched_words - MEANINGLESS_MATCH_WORDS).intersection(description_words):
+        return "the description shares no meaningful word with the searched name"
 
     uppercase_prefix = re.match(r"^([A-Z][A-Z0-9 '&.-]*),", description)
     if uppercase_prefix and any(character.isalpha() for character in uppercase_prefix[1]):
         return "the description starts with an uppercase brand-style prefix"
 
-    for term in USDA_PREPARATION_TERMS:
+    for term in USDA_ALWAYS_REJECT_TERMS:
+        if term in description_words and term not in searched_words:
+            return (
+                f"the description contains {term!r}, which is absent from the searched name"
+            )
+
+    for qualifier in USDA_QUALIFIER_TERMS:
         if (
-            re.search(rf"\b{re.escape(term)}\b", description, re.IGNORECASE)
-            and not re.search(rf"\b{re.escape(term)}\b", dish_name, re.IGNORECASE)
+            re.search(rf"\b{re.escape(qualifier)}\b", description, re.IGNORECASE)
+            and not re.search(
+                rf"\b{re.escape(qualifier)}\b",
+                searched_name,
+                re.IGNORECASE,
+            )
         ):
-            return f"the description contains {term!r}, which is absent from the dish name"
+            return (
+                f"the description contains qualifier {qualifier!r}, which is absent "
+                "from the searched name"
+            )
+
+    for term in USDA_PREPARATION_TERMS:
+        if term in description_words and term not in searched_words:
+            return (
+                f"the description contains {term!r}, which is absent from the searched name"
+            )
+
+    unexplained_words = (
+        description_words
+        - searched_words
+        - MEANINGLESS_MATCH_WORDS
+        - USDA_DESCRIPTION_WORDS
+    )
+    if unexplained_words:
+        return (
+            "the description contains words not explained by the searched name: "
+            + ", ".join(sorted(unexplained_words))
+        )
     return None
+
+
+def _whole_dish_usda_rejection_reason(
+    dish_name: str,
+    description: str,
+    data_type: str | None,
+    detected_items: list[str] | None = None,
+) -> str | None:
+    return _usda_description_rejection_reason(dish_name, description, data_type)
+
+
+def _is_mixed_produce_dish(dish_name: str, rejected_description: str) -> bool:
+    mixed_produce_terms = (
+        r"\bmixed\s+fruit\b",
+        r"\bfruit\s+(?:salad|bowl|mix)\b",
+        r"\bmixed\s+vegetables?\b",
+        r"\bvegetable\s+(?:salad|medley|mix)\b",
+    )
+    searchable_text = f"{dish_name} {rejected_description}"
+    return any(
+        re.search(pattern, searchable_text, re.IGNORECASE)
+        for pattern in mixed_produce_terms
+    )
 
 
 def _is_combination_dish(dish_name: str) -> bool:
@@ -496,7 +622,9 @@ async def estimate_nutrition(
     detected_items: list[str],
     serving_size_g: float | None = None,
 ) -> tuple[NutritionInfo, int | None, str | None, str, list[str], list[str]]:
-    if not dish_name:
+    has_dish_name = bool(dish_name and dish_name.strip())
+    missing_dish_uncertainty = "The dish name was missing; detected food items were used instead."
+    if not has_dish_name and not detected_items:
         return (
             NutritionInfo(
                 serving_size_g=serving_size_g,
@@ -514,6 +642,98 @@ async def estimate_nutrition(
             [],
         )
 
+    if not has_dish_name:
+        uncertainty = [missing_dish_uncertainty]
+        if len(detected_items) == 1:
+            item_name = detected_items[0]
+            local_match = _find_local_food(item_name)
+            if local_match is not None:
+                canonical_name, entry = local_match
+                size = serving_size_g or float(entry["default_serving_g"])
+                return _nutrition_response(
+                    entry=entry,
+                    source="Local nutrition reference (approximate values per 100 g)",
+                    serving_size_g=size,
+                    serving_description=(
+                        f"{size:g} g of {canonical_name}"
+                        + (
+                            " (reference serving assumption)"
+                            if serving_size_g is None
+                            else " (user-supplied serving weight)"
+                        )
+                    ),
+                    assumed=serving_size_g is None,
+                    uncertainty=uncertainty,
+                )
+
+            usda_match = await _fetch_usda_food(item_name)
+            if usda_match is not None:
+                usda_name, per_100_g = usda_match
+                size = serving_size_g or DEFAULT_DISH_SERVING_G
+                return _nutrition_response(
+                    entry=per_100_g,
+                    source="USDA FoodData Central (per 100 g reference estimate)",
+                    serving_size_g=size,
+                    serving_description=(
+                        f"{size:g} g of {usda_name}"
+                        + (
+                            " (standard dish serving assumption)"
+                            if serving_size_g is None
+                            else " (user-supplied serving weight)"
+                        )
+                    ),
+                    assumed=serving_size_g is None,
+                    uncertainty=uncertainty,
+                )
+            logger.info("No nutrition reference match for food: %s", item_name)
+            uncertainty.append(
+                f"No local or USDA reference was found for {item_name!r}; numeric nutrition values and health score are withheld."
+            )
+            return (
+                NutritionInfo(
+                    serving_size_g=serving_size_g,
+                    serving_description=(
+                        f"{serving_size_g:g} g requested; nutrient values unavailable."
+                        if serving_size_g is not None
+                        else "Serving size unavailable because no reliable food reference was found."
+                    ),
+                    source="No reliable nutrition reference",
+                    serving_size_is_assumed=serving_size_g is None,
+                    uncertainties=uncertainty,
+                ),
+                None,
+                None,
+                "No health score was calculated because reliable nutrient values are unavailable.",
+                ["Nutrition values for this food could not be verified."],
+                [],
+            )
+
+        multi_item_result = await _estimate_from_detected_items(
+            detected_items,
+            serving_size_g,
+        )
+        multi_item_result[0].uncertainties.append(missing_dish_uncertainty)
+        return multi_item_result
+
+    local_match = _find_local_food(dish_name)
+    if local_match is not None:
+        canonical_name, entry = local_match
+        default_size = float(entry["default_serving_g"])
+        size = serving_size_g or default_size
+        assumed = serving_size_g is None
+        serving_description = (
+            f"{size:g} g of {canonical_name}"
+            + (" (reference serving assumption)" if assumed else " (user-supplied serving weight)")
+        )
+        return _nutrition_response(
+            entry=entry,
+            source="Local nutrition reference (approximate values per 100 g)",
+            serving_size_g=size,
+            serving_description=serving_description,
+            assumed=assumed,
+            uncertainty=[],
+        )
+
     uncertainty = []
     rejected_usda_description = None
     is_combination = _is_combination_dish(dish_name)
@@ -527,6 +747,7 @@ async def estimate_nutrition(
             dish_name,
             usda_name,
             data_type,
+            detected_items,
         )
         if rejection_reason:
             rejected_usda_description = (
@@ -554,14 +775,12 @@ async def estimate_nutrition(
             "USDA FoodData Central was unavailable or had no usable match; a local reference is used if available."
         )
 
-    local_match = _find_local_food(dish_name)
     matched_name = dish_name
-    if local_match is None:
-        logger.info("No nutrition reference match for food: %s", dish_name)
-        if len(detected_items) == 1:
-            local_match = _find_local_food(detected_items[0])
-            if local_match:
-                matched_name = detected_items[0]
+    logger.info("No nutrition reference match for food: %s", dish_name)
+    if len(detected_items) == 1:
+        local_match = _find_local_food(detected_items[0])
+        if local_match:
+            matched_name = detected_items[0]
 
     if local_match is not None:
         canonical_name, entry = local_match
@@ -582,9 +801,16 @@ async def estimate_nutrition(
         )
 
     if len(detected_items) > 1:
+        use_primary_produce_data = bool(
+            rejected_usda_description
+            and _is_mixed_produce_dish(dish_name, rejected_usda_description)
+        )
         multi_item_result = await _estimate_from_detected_items(
             detected_items,
             serving_size_g,
+            usda_lookup=(
+                _fetch_primary_usda_food if use_primary_produce_data else None
+            ),
         )
         if rejected_usda_description:
             multi_item_result[0].uncertainties.append(rejected_usda_description)
