@@ -1,4 +1,6 @@
 from typing import Annotated, Literal
+from uuid import UUID
+from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -380,3 +382,163 @@ class RecipeGenerationResponse(BaseModel):
     substitutions: list[str] = Field(default_factory=list)
     uncertainties: list[str] = Field(default_factory=list)
     disclaimers: list[str] = Field(default_factory=list)
+
+
+ProfileSex = Literal["female", "male", "other", "prefer_not_to_say"]
+ProfileHeightUnit = Literal["cm", "in"]
+ProfileWeightUnit = Literal["kg", "lb"]
+ProfileActivityLevel = Literal[
+    "sedentary", "light", "moderate", "active", "very_active"
+]
+ProfileHealthGoal = Literal[
+    "maintain", "lose_weight", "gain_weight", "build_muscle", "eat_healthier"
+]
+ProfileDietType = Literal[
+    "omnivore",
+    "vegetarian",
+    "vegan",
+    "pescatarian",
+    "eggetarian",
+    "jain",
+    "halal",
+    "kosher",
+    "other",
+]
+CanonicalAllergen = Literal[
+    "milk",
+    "egg",
+    "peanut",
+    "tree_nuts",
+    "wheat_gluten",
+    "soy",
+    "fish",
+    "shellfish",
+    "sesame",
+    "mustard",
+    "celery",
+    "sulphites",
+]
+ExclusionReason = Literal["allergy", "diet", "restriction", "dislike"]
+SafetyFlagSeverity = Literal["info", "warning", "consult_professional"]
+
+
+class UserProfileInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    age_years: int = Field(ge=13, le=100)
+    sex: ProfileSex
+    height: float = Field(gt=0, allow_inf_nan=False)
+    height_unit: ProfileHeightUnit
+    weight: float = Field(gt=0, allow_inf_nan=False)
+    weight_unit: ProfileWeightUnit
+    activity_level: ProfileActivityLevel
+    health_goal: ProfileHealthGoal
+    diet_type: ProfileDietType
+    allergies: list[Annotated[str, Field(min_length=1, max_length=50)]] = Field(
+        default_factory=list, max_length=20
+    )
+    food_restrictions: list[Annotated[str, Field(min_length=1, max_length=50)]] = Field(
+        default_factory=list, max_length=20
+    )
+    dislikes: list[Annotated[str, Field(min_length=1, max_length=50)]] = Field(
+        default_factory=list, max_length=20
+    )
+    medical_conditions: list[Annotated[str, Field(min_length=1, max_length=500)]] | None = Field(
+        default=None, max_length=10
+    )
+    pregnant_or_breastfeeding: bool | None = None
+    meals_per_day: int = Field(default=3, ge=2, le=6)
+    cuisine_preferences: list[Annotated[str, Field(min_length=1, max_length=50)]] = Field(
+        default_factory=list, max_length=10
+    )
+
+    @field_validator(
+        "sex",
+        "height_unit",
+        "weight_unit",
+        "activity_level",
+        "health_goal",
+        "diet_type",
+        mode="before",
+    )
+    @classmethod
+    def clean_categories(cls, value: object) -> object:
+        return _clean_profile_text(value)
+
+    @field_validator(
+        "allergies",
+        "food_restrictions",
+        "dislikes",
+        "medical_conditions",
+        "cuisine_preferences",
+        mode="before",
+    )
+    @classmethod
+    def clean_text_lists(cls, value: object) -> object:
+        if value is None or not isinstance(value, list):
+            return value
+        return [_clean_profile_text(item) for item in value]
+
+
+def _clean_profile_text(value: object) -> object:
+    if not isinstance(value, str):
+        return value
+    cleaned = value.strip()
+    if any(ord(character) < 32 or 127 <= ord(character) <= 159 for character in cleaned):
+        raise ValueError("Control characters are not allowed.")
+    return cleaned
+
+
+class ExcludedFood(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    reason: ExclusionReason
+    strict: bool
+
+
+class ProfileSafetyFlag(BaseModel):
+    code: str
+    message: str
+    severity: SafetyFlagSeverity
+
+
+class UserProfile(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    profile_id: UUID
+    created_at: datetime
+    age_years: int = Field(ge=13, le=100)
+    sex: ProfileSex
+    height: float = Field(gt=0, allow_inf_nan=False)
+    height_unit: ProfileHeightUnit
+    weight: float = Field(gt=0, allow_inf_nan=False)
+    weight_unit: ProfileWeightUnit
+    height_cm: float = Field(ge=100, le=250, allow_inf_nan=False)
+    weight_kg: float = Field(ge=25, le=300, allow_inf_nan=False)
+    bmi: float = Field(gt=0, allow_inf_nan=False)
+    activity_level: ProfileActivityLevel
+    health_goal: ProfileHealthGoal
+    diet_type: ProfileDietType
+    meals_per_day: int = Field(ge=2, le=6)
+    cuisine_preferences: list[str] = Field(default_factory=list, max_length=10)
+    food_restrictions: list[str] = Field(default_factory=list, max_length=20)
+    dislikes: list[str] = Field(default_factory=list, max_length=20)
+    allergens: list[CanonicalAllergen] = Field(default_factory=list, max_length=20)
+    unrecognized_allergies: list[str] = Field(default_factory=list, max_length=20)
+    excluded_foods: list[ExcludedFood] = Field(default_factory=list, max_length=100)
+    medical_conditions: list[str] = Field(default_factory=list, max_length=10)
+    pregnant_or_breastfeeding: bool | None = None
+    safety_flags: list[ProfileSafetyFlag] = Field(default_factory=list)
+    requires_professional_review: bool
+    warnings: list[str] = Field(default_factory=list)
+    completeness_score: float = Field(ge=0, le=100, allow_inf_nan=False)
+    schema_version: str = "1.0"
+
+
+class UserProfileOptions(BaseModel):
+    sexes: list[ProfileSex]
+    activity_levels: list[ProfileActivityLevel]
+    health_goals: list[ProfileHealthGoal]
+    diet_types: list[ProfileDietType]
+    canonical_allergens: list[CanonicalAllergen]
+    height_units: list[ProfileHeightUnit]
+    weight_units: list[ProfileWeightUnit]

@@ -259,3 +259,71 @@ chicken are flagged on the ingredient and in `warnings`.
 Recipes are AI-generated and are not independently verified. This feature is
 not medical advice and provides no medical or allergy guarantee. Check product
 labels, all ingredients, allergies, and safe cooking temperatures yourself.
+
+## User profiles for meal-planning inputs
+
+The profile API collects and validates self-reported preferences and basic
+measurements; it does not generate meal plans, calorie targets, or macro
+targets.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `POST` | `/api/profile/validate` | Validate and normalize a profile without storing it. |
+| `POST` | `/api/profile` | Validate and store a profile; returns `201`. |
+| `GET` | `/api/profile/{profile_id}` | Retrieve a stored profile. |
+| `PUT` | `/api/profile/{profile_id}` | Validate and replace a stored profile. |
+| `DELETE` | `/api/profile/{profile_id}` | Delete a stored profile. |
+| `GET` | `/api/profile/options` | Return allowed form options. |
+
+The JSON input includes age, sex, height and unit, weight and unit, activity
+level, health goal, diet type, allergies, food restrictions, dislikes, optional
+medical conditions and pregnancy/breastfeeding status, meals per day, and
+cuisine preferences. Age is limited to 13–100 years, height is normalized to
+100–250 cm, weight to 25–300 kg, and meals per day to 2–6. Height accepts cm or
+inches; weight accepts kg or pounds. Non-finite values, unknown fields, and
+control characters are rejected. Validation errors identify fields without
+echoing submitted profile values.
+
+BMI is computed by the backend and rounded to one decimal as an informational
+number only; it is not a diagnosis. `completeness_score` is based on which
+optional fields were explicitly supplied. The response preserves the original
+measurement values and units alongside normalized `height_cm` and `weight_kg`.
+
+Allergy normalization uses a keyword synonym table. For example, dairy, lactose,
+curd, and paneer map to `milk`; groundnut maps to `peanut`; maida, atta, and
+gluten map to `wheat_gluten`; prawn and shrimp map to `shellfish`; and til maps
+to `sesame`. The canonical set also includes egg, tree nuts, soy, fish, mustard,
+celery, and sulphites. Unmatched allergies are retained as strict exclusions
+and produce a warning; they are never discarded.
+
+Diet exclusions are applied in addition to allergies, restrictions, and
+dislikes:
+
+| Diet type | Excluded categories |
+| --- | --- |
+| `vegetarian` | Meat, poultry, fish, shellfish, gelatin |
+| `vegan` | Vegetarian exclusions plus milk, egg, honey |
+| `pescatarian` | Meat, poultry |
+| `eggetarian` | Meat, poultry, fish, shellfish |
+| `jain` | Meat, poultry, fish, shellfish, egg, root vegetables (including onion, garlic, potato, carrot) |
+| `halal` | Pork, alcohol |
+| `kosher` | Pork, shellfish |
+| `omnivore`, `other` | No additional exclusions |
+
+Allergies, diet exclusions, and food restrictions are strict exclusions;
+dislikes are non-strict. Conflicts, duplicates, and BMI/goal inconsistencies
+are surfaced as warnings rather than silently corrected.
+
+Safety flags recommend professional review for users under 18, pregnancy or
+breastfeeding, BMI below 18.5, or declared medical conditions; a weight-loss
+goal combined with one of these factors is also flagged. Messages are neutral
+and do not provide medical advice.
+
+Profiles are held only in process memory, are not written to disk, and expire
+after `PROFILE_TTL_MINUTES` (default 60). They can also be deleted using the
+delete endpoint. In-memory storage is temporary and is not shared between
+multiple application processes.
+
+Profiles are self-reported and unverified. BMI is informational only,
+allergen matching is keyword-based and is not a guarantee, and this feature is
+not medical advice.
