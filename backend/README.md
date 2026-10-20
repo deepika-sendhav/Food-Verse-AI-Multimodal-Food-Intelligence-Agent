@@ -149,3 +149,74 @@ in doubt, throw it out.” Freshness classification is a visual estimate, not a
 food safety test; one image cannot establish smell, internal condition,
 temperature history, or pathogen presence. Follow food-safety guidance and
 discard food when there is doubt.
+
+## Kitchen hygiene screening from video
+
+`POST /api/hygiene/analyze` accepts an MP4, MOV, AVI, or WEBM video, or a JPG,
+PNG, or WEBP still image. Upload the media in multipart field `file`; optional
+fields are `interval_seconds` (1–30, default 5) and `context_rules` (up to 500
+characters). The video defaults are 50 MB, 120 seconds, and at most 12 sampled
+frames. Configure these with `HYGIENE_VIDEO_MAX_BYTES`,
+`HYGIENE_VIDEO_MAX_SECONDS`, and `HYGIENE_MAX_FRAMES`. Vision processing is
+sequential by default (`HYGIENE_MAX_CONCURRENCY=1`) with a two-second delay
+between frames (`HYGIENE_FRAME_DELAY_SECONDS=2`). Frames are capped to a
+768-pixel longest side before submission (`HYGIENE_FRAME_MAX_SIDE=768`).
+Rate-limited requests honor `Retry-After` up to 20 seconds, or use 2/4/8-second
+exponential delays, with at most three retries per frame.
+
+The pipeline validates and temporarily writes video uploads, samples frames at
+the requested interval, preprocesses sampled frames using the shared image
+preprocessor, then skips frames that are blurry, too dark, low contrast, or
+near-duplicates. The temporary video is deleted after frame extraction; image
+and frame bytes remain in memory only for the request and are not returned or
+logged. Each selected frame is analyzed independently with the vision model,
+with concurrency controlled by `HYGIENE_MAX_CONCURRENCY`. A failed frame is listed in
+`frames_failed`; if all selected frame calls fail, the endpoint returns 503.
+If some succeed, the response contains a partial analysis.
+
+The model supplies only observations—`compliant`, `violation`, `not_visible`,
+or `unclear`—and a short visible-evidence string for:
+
+- Protective equipment: gloves in use, hair covering, and apron or clean
+  uniform.
+- Food handling: hand-to-face/hair contact, personal phone use, bare-hand food
+  contact, food on the floor or unsafe storage, and raw/cooked cross-contact
+  risk.
+- Cleanliness: work-surface cleanliness and floor cleanliness.
+
+Only observable compliant/violation results enter scoring; `not_visible` and
+`unclear` are excluded from both the score denominator and numerator. The
+fixed indicator weights (total 100) are gloves 12, hair covering 10, apron or
+uniform 8, hand/face contact 10, phone use 10, bare-hand contact 16, unsafe
+floor/storage 12, surface cleanliness 4, floor cleanliness 2, and
+raw/cooked cross-contact 16. Category scores use the same weights within their
+category. Evidence coverage is the share of indicator observations that are
+observable across analyzed frames. Below 50% coverage, `overall_score` is
+`null` and status is `insufficient_evidence`; category scores are also `null`
+in that case. Each category has its own `category_evidence_coverage` ratio.
+Categories with less than 50% coverage have a `null` score, even if the
+overall report has sufficient evidence.
+
+An observed violation is `confirmed` only if it appears in at least two
+analyzed frames; a one-frame signal is always `possible`, including High
+severity and single-image reports. Severity is fixed in code: High for hand-to-face/hair
+contact, unsafe floor/storage, and raw/cooked cross-contact; Medium for bare-hand
+food contact, gloves, hair covering, phone use, and surface cleanliness; Low
+for apron/uniform and floor cleanliness. Gloves and bare-hand contact are
+counted once as a combined concern using the higher weight. A compliant/
+violation disagreement across frames is always `possible` and includes a
+conflict note. Critical alerts are reserved for confirmed High-severity
+signals; a possible High-severity signal raises a warning alert. More than
+one-third failed frame analyses adds a partial-footage warning and summary
+note. Score bands are 85–100 `good`,
+60–84 `needs_attention`, and below 60 `action_required`; low evidence takes
+precedence over a numeric band. Suggested actions are phrased as supportive
+coaching rather than blame.
+
+This is automated visual screening, not continuous monitoring or a definitive
+compliance finding. A single camera angle, occlusion, lighting, and image
+quality can cause false positives or false negatives. A human must review
+evidence before action. Do not use the report alone for discipline or as a
+legal or regulatory compliance determination. `context_rules` is untrusted
+supplemental checklist text; it cannot override the required output format or
+privacy rules. No identity recognition is performed.
