@@ -1,4 +1,4 @@
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
 from backend.config import MAX_UPLOAD_SIZE_BYTES
 from backend.schemas import FoodAnalysisResponse
@@ -9,6 +9,7 @@ from backend.services.food_classifier import (
     classify_food,
 )
 from backend.services.image_processing import InvalidImageError, preprocess_image
+from backend.services.nutrition_estimation import estimate_nutrition
 
 router = APIRouter(prefix="/api/food-recognition", tags=["food recognition"])
 
@@ -21,7 +22,10 @@ ALLOWED_UPLOADS = {
 
 
 @router.post("/analyze", response_model=FoodAnalysisResponse)
-async def analyze_food_image(file: UploadFile = File(...)) -> FoodAnalysisResponse:
+async def analyze_food_image(
+    file: UploadFile = File(...),
+    serving_size_g: float | None = Form(default=None, gt=0, le=5000),
+) -> FoodAnalysisResponse:
     try:
         suffix = ""
         if file.filename:
@@ -67,13 +71,32 @@ async def analyze_food_image(file: UploadFile = File(...)) -> FoodAnalysisRespon
                 detail="The food vision service returned an invalid response.",
             ) from exc
 
+        (
+            nutrition,
+            health_score,
+            health_label,
+            reasoning,
+            insights,
+            alternatives,
+        ) = await estimate_nutrition(
+            dish_name=result.dish_name,
+            detected_items=result.detected_items,
+            serving_size_g=serving_size_g,
+        )
+
         return FoodAnalysisResponse(
             success=True,
             dish_name=result.dish_name,
             detected_items=result.detected_items,
             confidence=None,
             description=result.description,
-            uncertainties=result.uncertainties,
+            uncertainties=list(dict.fromkeys(result.uncertainties + nutrition.uncertainties)),
+            nutrition=nutrition,
+            health_score=health_score,
+            health_label=health_label,
+            reasoning=reasoning,
+            insights=insights,
+            alternatives=alternatives,
         )
     finally:
         await file.close()

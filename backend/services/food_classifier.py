@@ -34,13 +34,20 @@ async def classify_food(image_bytes: bytes) -> FoodModelResult:
 
     encoded_image = base64.b64encode(image_bytes).decode("ascii")
     prompt = (
-        "Analyze this food image. Identify the most likely dish and any clearly visible food "
-        "items. Do not infer hidden ingredients or claim certainty when the image is unclear. "
-        "If there is not enough visual evidence to name a dish, use null for dish_name, list "
-        "only items that are identifiable, and explain uncertainty. Return JSON with exactly "
-        "these fields: dish_name (string or null), detected_items (array of strings), "
-        "description (short string), uncertainties (array of strings). Do not include a "
-        "confidence score."
+        "Analyze this food image. Identify the most likely dish and clearly visible edible "
+        "food or drink items only. Use simple, consistent names for items (for example "
+        "\"green chili\", not \"stuffed pepper\" or \"stuffed green chili\"). List side "
+        "garnishes such as chili, lime, onion, and cilantro as separate items. Each "
+        "detected_items entry must be a short common food name; do not include descriptive "
+        "phrases or serving containers. The detected_items array must contain only edible "
+        "foods, ingredients, or drinks. Never include utensils, plates, bowls, cups, glasses, "
+        "trays, containers, packaging, tableware, furniture, or any other non-food object in "
+        "detected_items. Do not infer hidden ingredients or claim certainty when the image is "
+        "unclear. If there is not enough visual evidence to name a dish, use null for "
+        "dish_name, list only edible items that are identifiable (or an empty array), and "
+        "explain uncertainty. Return JSON with exactly these fields: dish_name (string or "
+        "null), detected_items (array of edible food/drink strings only), description (short "
+        "string), uncertainties (array of strings). Do not include a confidence score."
     )
 
     try:

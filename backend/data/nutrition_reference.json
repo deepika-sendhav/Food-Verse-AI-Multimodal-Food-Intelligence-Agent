@@ -1,0 +1,218 @@
+{
+  "cooked white rice": {
+    "aliases": [
+      "cooked rice",
+      "white rice",
+      "rice"
+    ],
+    "default_serving_g": 158.0,
+    "calories_kcal": 130.0,
+    "protein_g": 2.69,
+    "carbs_g": 28.17,
+    "fats_g": 0.28,
+    "fiber_g": 0.4,
+    "sugar_g": 0.05
+  },
+  "whole wheat roti": {
+    "aliases": [
+      "roti",
+      "chapati",
+      "whole wheat flatbread"
+    ],
+    "default_serving_g": 40.0,
+    "calories_kcal": 297.0,
+    "protein_g": 9.6,
+    "carbs_g": 46.0,
+    "fats_g": 7.5,
+    "fiber_g": 11.0,
+    "sugar_g": 2.0
+  },
+  "cooked lentils": {
+    "aliases": [
+      "dal",
+      "cooked dal",
+      "lentils",
+      "cooked lentils"
+    ],
+    "default_serving_g": 200.0,
+    "calories_kcal": 116.0,
+    "protein_g": 9.02,
+    "carbs_g": 20.13,
+    "fats_g": 0.38,
+    "fiber_g": 7.9,
+    "sugar_g": 1.8
+  },
+  "boiled egg": {
+    "aliases": [
+      "boiled egg",
+      "hard-boiled egg",
+      "egg"
+    ],
+    "default_serving_g": 50.0,
+    "calories_kcal": 155.0,
+    "protein_g": 12.58,
+    "carbs_g": 1.12,
+    "fats_g": 10.61,
+    "fiber_g": 0.0,
+    "sugar_g": 1.12
+  },
+  "banana": {
+    "aliases": [
+      "banana"
+    ],
+    "default_serving_g": 118.0,
+    "calories_kcal": 89.0,
+    "protein_g": 1.09,
+    "carbs_g": 22.84,
+    "fats_g": 0.33,
+    "fiber_g": 2.6,
+    "sugar_g": 12.23
+  },
+  "whole milk": {
+    "aliases": [
+      "whole milk",
+      "milk"
+    ],
+    "default_serving_g": 244.0,
+    "calories_kcal": 61.0,
+    "protein_g": 3.15,
+    "carbs_g": 4.8,
+    "fats_g": 3.25,
+    "fiber_g": 0.0,
+    "sugar_g": 5.05
+  },
+  "paneer": {
+    "aliases": [
+      "paneer",
+      "cottage cheese"
+    ],
+    "default_serving_g": 100.0,
+    "calories_kcal": 265.0,
+    "protein_g": 18.3,
+    "carbs_g": 1.2,
+    "fats_g": 20.8,
+    "fiber_g": 0.0,
+    "sugar_g": 1.2
+  },
+  "mixed cooked vegetables": {
+    "aliases": [
+      "mixed vegetables",
+      "cooked vegetables",
+      "vegetables"
+    ],
+    "default_serving_g": 150.0,
+    "calories_kcal": 65.0,
+    "protein_g": 2.0,
+    "carbs_g": 13.0,
+    "fats_g": 0.5,
+    "fiber_g": 4.0,
+    "sugar_g": 5.0
+  },
+  "samosa": {
+    "aliases": [
+      "samosa",
+      "samosas"
+    ],
+    "default_serving_g": 100.0,
+    "calories_kcal": 310.0,
+    "protein_g": 5.14,
+    "carbs_g": 33.16,
+    "fats_g": 17.47,
+    "fiber_g": 1.8,
+    "sugar_g": 1.28,
+    "source": "USDA FDC 2708730, Samosa (Survey FNDDS); prepared recipe and oil vary"
+  },
+  "radish": {
+    "aliases": [
+      "radish",
+      "mooli",
+      "mullangi"
+    ],
+    "default_serving_g": 100.0,
+    "calories_kcal": 16.0,
+    "protein_g": 0.68,
+    "carbs_g": 3.4,
+    "fats_g": 0.1,
+    "fiber_g": 1.6,
+    "sugar_g": 1.86,
+    "source": "USDA FDC 2709803, Radish (Survey FNDDS)"
+  },
+  "boiled chickpeas": {
+    "aliases": [
+      "chickpeas",
+      "chickpea",
+      "chana",
+      "chole",
+      "cooked chickpeas"
+    ],
+    "default_serving_g": 160,
+    "sugar_g": 4.8,
+    "fiber_g": 7.6,
+    "carbs_g": 27.4,
+    "calories_kcal": 164.0,
+    "fats_g": 2.59,
+    "protein_g": 8.86,
+    "source": "USDA FDC 173799: Chickpeas (garbanzo beans, bengal gram), mature seeds, cooked, boiled, with salt"
+  },
+  "boiled potato": {
+    "aliases": [
+      "potato",
+      "potatoes",
+      "boiled potato"
+    ],
+    "default_serving_g": 150,
+    "sugar_g": 5.74,
+    "carbs_g": 17.7,
+    "calories_kcal": 76.0,
+    "protein_g": 1.37,
+    "fiber_g": 2.5,
+    "fats_g": 0.14,
+    "source": "USDA FDC 168484: Sweet potato, cooked, boiled, without skin"
+  },
+  "raw cucumber": {
+    "aliases": [
+      "cucumber",
+      "cucumbers",
+      "sliced cucumber"
+    ],
+    "default_serving_g": 50,
+    "calories_kcal": 10.0,
+    "fiber_g": 0.7,
+    "sugar_g": 1.38,
+    "carbs_g": 2.16,
+    "fats_g": 0.16,
+    "protein_g": 0.59,
+    "source": "USDA FDC 169225: Cucumber, peeled, raw"
+  },
+  "raw onion": {
+    "aliases": [
+      "onion",
+      "red onion",
+      "sliced onion"
+    ],
+    "default_serving_g": 30,
+    "sugar_g": 4.24,
+    "fats_g": 0.1,
+    "carbs_g": 9.34,
+    "calories_kcal": 40.0,
+    "protein_g": 1.1,
+    "fiber_g": 1.7,
+    "source": "USDA FDC 170000: Onions, raw"
+  },
+  "plain yogurt": {
+    "aliases": [
+      "yogurt",
+      "curd",
+      "dahi",
+      "raita"
+    ],
+    "default_serving_g": 150,
+    "sugar_g": 4.66,
+    "calories_kcal": 61.0,
+    "protein_g": 3.47,
+    "fiber_g": 0.0,
+    "fats_g": 3.25,
+    "carbs_g": 4.66,
+    "source": "USDA FDC 171284: Yogurt, plain, whole milk"
+  }
+}

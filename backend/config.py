@@ -30,3 +30,4 @@ GROQ_VISION_MODEL = os.getenv("GROQ_VISION_MODEL", "").strip() or "qwen/qwen3.8-
 GROQ_TIMEOUT_SECONDS = _positive_float("GROQ_TIMEOUT_SECONDS", 30.0)
 MAX_UPLOAD_SIZE_BYTES = _positive_int("FOOD_IMAGE_MAX_BYTES", 10 * 1024 * 1024)
 MAX_IMAGE_SIDE = _positive_int("FOOD_IMAGE_MAX_SIDE", 2048)
+USDA_FDC_API_KEY = os.getenv("USDA_FDC_API_KEY", "").strip()

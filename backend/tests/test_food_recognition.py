@@ -9,10 +9,16 @@ import pytest
 
 from backend.main import app
 from backend.routers import food_recognition
-from backend.schemas import FoodAnalysisResponse
+from backend.schemas import FoodAnalysisResponse, FoodModelResult
 from backend.services import food_classifier
+from backend.services import nutrition_estimation
 
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def disable_usda_requests(monkeypatch):
+    monkeypatch.setattr(nutrition_estimation, "USDA_FDC_API_KEY", "")
 
 
 def make_png() -> bytes:
@@ -87,6 +93,46 @@ def test_valid_food_image_is_classified(monkeypatch):
     assert request["model"] == food_classifier.GROQ_VISION_MODEL
     image_content = request["messages"][0]["content"][1]["image_url"]["url"]
     assert image_content.startswith("data:image/jpeg;base64,")
+    prompt = request["messages"][0]["content"][0]["text"].casefold()
+    assert "edible food" in prompt
+    assert 'use simple, consistent names for items (for example "green chili"' in prompt
+    assert 'not "stuffed pepper" or "stuffed green chili"' in prompt
+    assert "list side garnishes such as chili, lime, onion, and cilantro as separate items" in prompt
+    assert "lime, onion, and cilantro" in prompt
+    assert "never include utensils, plates, bowls" in prompt
+
+
+def test_detected_items_excludes_tableware_and_other_objects(monkeypatch):
+    mock_groq(
+        monkeypatch,
+        {
+            "dish_name": "Rice and dal",
+            "detected_items": ["rice", "plate", "steel bowl", "fork", "dal", "napkin"],
+            "description": "Rice and dal served together.",
+            "uncertainties": [],
+        },
+    )
+
+    response = post_image(make_png())
+
+    assert response.status_code == 200
+    assert response.json()["detected_items"] == ["rice", "dal"]
+
+
+def test_detected_items_use_simple_names_and_separate_garnishes(monkeypatch):
+    result = FoodModelResult(
+        dish_name="Stuffed green chili",
+        detected_items=[
+            "Stuffed Green Chili",
+            "Lime",
+            "Onion",
+            "Cilantro",
+        ],
+        description="A stuffed green chili with garnish.",
+        uncertainties=[],
+    )
+
+    assert result.detected_items == ["green chili", "lime", "onion", "cilantro"]
 
 
 @pytest.mark.parametrize(
@@ -164,3 +210,25 @@ def test_successful_response_validates_against_schema(monkeypatch):
     validated = FoodAnalysisResponse.model_validate(response.json())
     assert validated.success is True
     assert validated.confidence is None
+    assert validated.nutrition.serving_size_g is None
+
+
+def test_serving_size_can_be_supplied_as_multipart_form_field(monkeypatch):
+    async def classify(_image_bytes):
+        return FoodModelResult(
+            dish_name="banana",
+            detected_items=["banana"],
+            description="A banana.",
+            uncertainties=[],
+        )
+
+    monkeypatch.setattr(food_recognition, "classify_food", classify)
+    response = client.post(
+        "/api/food-recognition/analyze",
+        files={"file": ("banana.png", make_png(), "image/png")},
+        data={"serving_size_g": "200"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["nutrition"]["serving_size_g"] == 200
+    assert response.json()["nutrition"]["serving_size_is_assumed"] is False

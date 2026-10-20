@@ -20,3 +20,4 @@ pydub
 fpdf
 groq
 pytest
+httpx
