@@ -1,9 +1,10 @@
+import asyncio
 from typing import Literal
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 
-from backend.config import MAX_UPLOAD_SIZE_BYTES
+from backend.config import DEMO_MODE, MAX_UPLOAD_SIZE_BYTES
 from backend.schemas import RecipeGenerationResponse
 from backend.services.image_processing import InvalidImageError, preprocess_image
 from backend.services.recipe_generator import (
@@ -16,6 +17,7 @@ from backend.services.recipe_generator import (
     build_recipe_response,
     generate_recipe,
 )
+from backend.services.demo_responses import load_demo_response
 
 router = APIRouter(prefix="/api/kitchen", tags=["kitchen assistant"])
 
@@ -74,7 +76,7 @@ async def generate_recipe_endpoint(
                     detail="The uploaded image exceeds the size limit.",
                 )
             try:
-                processed_image = preprocess_image(image_bytes)
+                processed_image = await asyncio.to_thread(preprocess_image, image_bytes)
             except InvalidImageError as exc:
                 raise HTTPException(
                     status_code=422,
@@ -88,6 +90,11 @@ async def generate_recipe_endpoint(
             if processed_image is not None
             else "text"
         )
+        if DEMO_MODE:
+            return load_demo_response(
+                "kitchen_assistant",
+                RecipeGenerationResponse,
+            )
         try:
             model_result = await generate_recipe(
                 text_input=cleaned_text,

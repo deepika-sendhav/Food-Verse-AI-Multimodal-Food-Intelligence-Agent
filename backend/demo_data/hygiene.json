@@ -1,0 +1,47 @@
+{
+  "success": true,
+  "overall_score": null,
+  "status": "insufficient_evidence",
+  "category_scores": {
+    "protective_equipment": null,
+    "food_handling": null,
+    "cleanliness": null
+  },
+  "evidence_coverage": 0.25,
+  "category_evidence_coverage": {
+    "protective_equipment": 0.25,
+    "food_handling": 0.25,
+    "cleanliness": 0.25
+  },
+  "violations": [
+    {
+      "indicator": "surface_cleanliness",
+      "severity": "Low",
+      "status": "possible",
+      "timestamps_seconds": [0.0],
+      "frame_count": 1,
+      "evidence": ["A small area of the work surface is visible."],
+      "notes": ["The view is too limited for confirmation."],
+      "suggested_action": "Include a wider view of the preparation area for a more useful check."
+    }
+  ],
+  "alerts": [
+    {
+      "level": "warning",
+      "title": "Limited sample evidence",
+      "message": "This demonstration includes a simulated frame failure; review is incomplete."
+    }
+  ],
+  "summary": "Demo sample: limited evidence is available, so no overall score is assigned.",
+  "frames_analyzed": 1,
+  "frames_skipped": [
+    {"timestamp_seconds": 5.0, "reason": "Sample frame omitted to demonstrate partial coverage."}
+  ],
+  "frames_failed": [
+    {"timestamp_seconds": 10.0, "reason": "Simulated frame failure in demo data."}
+  ],
+  "disclaimers": [
+    "This demonstration is not a certification or substitute for food-safety training.",
+    "The sample is synthetic and is not an analysis of an uploaded video."
+  ]
+}

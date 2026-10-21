@@ -1,6 +1,8 @@
+import asyncio
+
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
-from backend.config import MAX_UPLOAD_SIZE_BYTES
+from backend.config import DEMO_MODE, MAX_UPLOAD_SIZE_BYTES
 from backend.schemas import FoodAnalysisResponse
 from backend.services.food_classifier import (
     ModelResponseError,
@@ -10,6 +12,7 @@ from backend.services.food_classifier import (
 )
 from backend.services.image_processing import InvalidImageError, preprocess_image
 from backend.services.nutrition_estimation import estimate_nutrition
+from backend.services.demo_responses import load_demo_response
 
 router = APIRouter(prefix="/api/food-recognition", tags=["food recognition"])
 
@@ -46,12 +49,15 @@ async def analyze_food_image(
             raise HTTPException(status_code=413, detail="The uploaded image exceeds the size limit.")
 
         try:
-            processed_image = preprocess_image(image_bytes)
+            processed_image = await asyncio.to_thread(preprocess_image, image_bytes)
         except InvalidImageError as exc:
             raise HTTPException(
                 status_code=422,
                 detail="The upload is not a valid, supported image.",
             ) from exc
+
+        if DEMO_MODE:
+            return load_demo_response("food_recognition", FoodAnalysisResponse)
 
         try:
             result = await classify_food(processed_image)

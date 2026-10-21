@@ -1,0 +1,10 @@
+.editorial {
+  --hero-pattern-dot: color-mix(in srgb, var(--green) 45%, transparent);
+}
+
+.editorial :global(.hero__art) {
+  background-image: radial-gradient(
+    var(--hero-pattern-dot) 0.55px,
+    transparent 0.55px
+  );
+}

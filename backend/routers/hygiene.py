@@ -1,6 +1,9 @@
+import asyncio
+
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
 from backend.config import (
+    DEMO_MODE,
     HYGIENE_VIDEO_MAX_BYTES,
     HYGIENE_VIDEO_MAX_SECONDS,
     MAX_UPLOAD_SIZE_BYTES,
@@ -13,6 +16,7 @@ from backend.services.video_frames import (
     InvalidVideoError,
     extract_media_frames,
 )
+from backend.services.demo_responses import load_demo_response
 
 router = APIRouter(prefix="/api/hygiene", tags=["kitchen hygiene"])
 
@@ -57,8 +61,12 @@ async def analyze_hygiene(
         if len(media_bytes) > upload_limit:
             raise HTTPException(status_code=413, detail="The uploaded file exceeds the size limit.")
 
+        if DEMO_MODE:
+            return load_demo_response("hygiene", HygieneAnalysisResponse)
+
         try:
-            extracted = extract_media_frames(
+            extracted = await asyncio.to_thread(
+                extract_media_frames,
                 media_bytes,
                 suffix,
                 interval_seconds,

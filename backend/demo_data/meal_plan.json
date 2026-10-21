@@ -1,0 +1,119 @@
+{
+  "success": true,
+  "status": "ok",
+  "plan_type": "daily",
+  "targets": {
+    "calories": 2050,
+    "protein_g": 100,
+    "carbs_g": 256,
+    "fats_g": 68,
+    "fiber_g": 28,
+    "hydration_ml": null,
+    "notes": ["Synthetic demonstration targets; not personalized."]
+  },
+  "days": [
+    {
+      "day_number": 1,
+      "meals": [
+        {
+          "meal_slot": "Breakfast",
+          "status": "available",
+          "dish_name": "Berry oat bowl",
+          "description": "Oats with berries and yogurt.",
+          "ingredients": [
+            {"name": "Rolled oats", "quantity_g": 50, "notes": null},
+            {"name": "Mixed berries", "quantity_g": 80, "notes": null},
+            {"name": "Plain yogurt", "quantity_g": 100, "notes": null}
+          ],
+          "portion_size": "1 bowl",
+          "prep_style": "No-cook",
+          "prep_time_minutes": 5,
+          "estimated_nutrition": {
+            "calories_kcal": 360,
+            "protein_g": 15,
+            "carbs_g": 55,
+            "fats_g": 9,
+            "fiber_g": 8
+          },
+          "nutrition_source": "model_estimate",
+          "nutrition_notes": ["Approximate sample values."],
+          "alternatives": [],
+          "unavailable_reason": null
+        },
+        {
+          "meal_slot": "Lunch",
+          "status": "available",
+          "dish_name": "Lentil grain bowl",
+          "description": "Lentils, brown rice, and vegetables.",
+          "ingredients": [
+            {"name": "Cooked lentils", "quantity_g": 150, "notes": null},
+            {"name": "Brown rice", "quantity_g": 120, "notes": null},
+            {"name": "Spinach", "quantity_g": 50, "notes": null}
+          ],
+          "portion_size": "1 bowl",
+          "prep_style": "Warm",
+          "prep_time_minutes": 15,
+          "estimated_nutrition": {
+            "calories_kcal": 520,
+            "protein_g": 24,
+            "carbs_g": 82,
+            "fats_g": 10,
+            "fiber_g": 16
+          },
+          "nutrition_source": "model_estimate",
+          "nutrition_notes": ["Approximate sample values."],
+          "alternatives": [],
+          "unavailable_reason": null
+        },
+        {
+          "meal_slot": "Dinner",
+          "status": "available",
+          "dish_name": "Roasted vegetable plate",
+          "description": "Seasonal vegetables with chickpeas and couscous.",
+          "ingredients": [
+            {"name": "Chickpeas", "quantity_g": 120, "notes": null},
+            {"name": "Seasonal vegetables", "quantity_g": 180, "notes": null},
+            {"name": "Couscous", "quantity_g": 120, "notes": null}
+          ],
+          "portion_size": "1 plate",
+          "prep_style": "Roasted",
+          "prep_time_minutes": 25,
+          "estimated_nutrition": {
+            "calories_kcal": 610,
+            "protein_g": 22,
+            "carbs_g": 92,
+            "fats_g": 14,
+            "fiber_g": 15
+          },
+          "nutrition_source": "model_estimate",
+          "nutrition_notes": ["Approximate sample values."],
+          "alternatives": [],
+          "unavailable_reason": null
+        }
+      ],
+      "daily_totals": {
+        "calories_kcal": 1490,
+        "protein_g": 61,
+        "carbs_g": 229,
+        "fats_g": 33,
+        "fiber_g": 39
+      },
+      "target_difference_percent": {
+        "calories_percent": -27.3,
+        "protein_percent": -39,
+        "carbs_percent": -10.5,
+        "fats_percent": -51.5,
+        "fiber_percent": 39.3
+      }
+    }
+  ],
+  "weekly_report": null,
+  "general_outline_type": null,
+  "general_outline": [],
+  "adaptive_suggestions": ["Sample plan values are illustrative, not personalized."],
+  "warnings": ["Synthetic demo plan; not generated for your profile."],
+  "failed_days": [],
+  "safety_flags": [],
+  "disclaimers": ["General guidance only; not medical or dietetic advice."],
+  "alert_level": "warning"
+}

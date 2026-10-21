@@ -1,0 +1,33 @@
+{
+  "success": true,
+  "status": "ok",
+  "input_type": "text",
+  "interpreted_goal": "A quick vegetable and lentil dinner",
+  "clarifying_question": null,
+  "dish_name": "Herby lentil skillet",
+  "cuisine": "Mediterranean-inspired",
+  "description": "A simple one-pan lentil dish with greens and lemon.",
+  "servings": 2,
+  "skill_level": "beginner",
+  "ingredients": [
+    {"name": "Cooked lentils", "quantity": 300, "unit": "g", "notes": null, "from_input": true, "dietary_conflict": false},
+    {"name": "Spinach", "quantity": 100, "unit": "g", "notes": null, "from_input": true, "dietary_conflict": false},
+    {"name": "Lemon", "quantity": 1, "unit": "piece", "notes": "Juice to taste", "from_input": false, "dietary_conflict": false}
+  ],
+  "steps": [
+    {"step_number": 1, "instruction": "Rinse and drain the cooked lentils.", "action_type": "prep", "duration_minutes": 2, "heat_level": null, "tip": null},
+    {"step_number": 2, "instruction": "Warm the lentils in a skillet over medium heat.", "action_type": "heat", "duration_minutes": 5, "heat_level": "medium", "tip": "Stir occasionally."},
+    {"step_number": 3, "instruction": "Fold in spinach until just wilted, then finish with lemon.", "action_type": "cook", "duration_minutes": 3, "heat_level": "low", "tip": null}
+  ],
+  "prep_time_minutes": 5,
+  "cook_time_minutes": 8,
+  "total_time_minutes": 13,
+  "difficulty": "beginner",
+  "equipment": ["Skillet", "Spoon"],
+  "allergens": {"contains": []},
+  "safety_notes": ["Use clean utensils and refrigerate leftovers promptly."],
+  "warnings": ["Sample recipe only; adapt quantities to your needs."],
+  "substitutions": ["Use kale in place of spinach."],
+  "uncertainties": ["Seasoning amounts are not specified."],
+  "disclaimers": ["Follow appropriate food-handling and cooking guidance."]
+}

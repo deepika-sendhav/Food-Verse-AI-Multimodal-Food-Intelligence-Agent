@@ -362,6 +362,36 @@ def test_daily_totals_and_adjustment_suggestion_are_computed(monkeypatch):
     assert any("protein source at dinner" in item for item in result.adaptive_suggestions)
 
 
+def test_model_output_accepts_string_numbers_missing_optional_and_extra_fields():
+    output = day_output().model_dump()
+    output["unknown_day_field"] = "ignored"
+    for item in output["meals"]:
+        item.pop("alternatives")
+        item["unknown_meal_field"] = "ignored"
+        item["meal"]["unknown_candidate_field"] = "ignored"
+        item["meal"]["prep_time_minutes"] = "10"
+        for field in (
+            "calories_kcal",
+            "protein_g",
+            "carbs_g",
+            "fats_g",
+            "fiber_g",
+        ):
+            item["meal"]["estimated_nutrition"][field] = str(
+                item["meal"]["estimated_nutrition"][field]
+            )
+        item["meal"]["ingredients"][0].pop("quantity_g")
+        item["meal"]["ingredients"][0].pop("notes")
+
+    parsed = MealDayModelOutput.model_validate(output)
+
+    assert parsed.meals[0].meal.prep_time_minutes == 10
+    assert parsed.meals[0].meal.estimated_nutrition.calories_kcal == 100
+    assert parsed.meals[0].meal.ingredients[0].quantity_g is None
+    assert parsed.meals[0].meal.ingredients[0].notes is None
+    assert parsed.meals[0].alternatives == []
+
+
 def test_nutrition_cross_check_prefers_computed_reference_over_30_percent(
     monkeypatch,
 ):
@@ -557,7 +587,6 @@ def test_expired_profile_returns_404(monkeypatch):
     [
         (meal_planner.ModelTimeoutError(), 504),
         (meal_planner.ModelUnavailableError(), 503),
-        (meal_planner.ModelResponseError(), 502),
     ],
 )
 def test_daily_model_errors_map_to_gateway_status(monkeypatch, error, status_code):
@@ -574,6 +603,119 @@ def test_daily_model_errors_map_to_gateway_status(monkeypatch, error, status_cod
     )
 
     assert response.status_code == status_code
+
+
+def test_daily_validation_retries_shorter_and_returns_partial(monkeypatch, caplog):
+    repository = install_meal_mocks(monkeypatch)
+    profile = stored_profile(repository)
+    attempts = []
+
+    class FakeGroq:
+        def __init__(self, **_kwargs):
+            self.chat = SimpleNamespace(
+                completions=SimpleNamespace(create=self.create)
+            )
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return False
+
+        async def create(self, **kwargs):
+            attempts.append(kwargs)
+            return SimpleNamespace(
+                choices=[
+                    SimpleNamespace(
+                        finish_reason="stop",
+                        message=SimpleNamespace(content='{"meals":[]}'),
+                    )
+                ]
+            )
+
+    monkeypatch.setenv("GROQ_API_KEY", "mock-key")
+    monkeypatch.setattr(meal_planner, "AsyncGroq", FakeGroq)
+    with caplog.at_level(logging.WARNING, logger=meal_planner.__name__):
+        response = client.post(
+            "/api/meal-plan/generate",
+            json={"profile_id": str(profile.profile_id)},
+        )
+
+    assert response.status_code == 200
+    result = response.json()
+    assert result["status"] == "partial"
+    assert result["failed_days"][0]["reason"] == "invalid model response"
+    assert len(attempts) == 2
+    assert len(attempts[0]["messages"][0]["content"]) > len(
+        attempts[1]["messages"][0]["content"]
+    )
+    assert attempts[0]["max_completion_tokens"] == 4000
+    assert "exception_class=ValidationError" in caplog.text
+    assert "pydantic_field_paths=meals" in caplog.text
+    assert str(profile.profile_id) not in caplog.text
+
+
+def test_truncated_model_output_is_distinct(monkeypatch):
+    profile = make_profile()
+    targets = compute_nutrition_targets(profile)
+    attempts = []
+
+    class FakeGroq:
+        def __init__(self, **_kwargs):
+            self.chat = SimpleNamespace(
+                completions=SimpleNamespace(create=self.create)
+            )
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return False
+
+        async def create(self, **kwargs):
+            attempts.append(kwargs)
+            return SimpleNamespace(
+                choices=[
+                    SimpleNamespace(
+                        finish_reason="length",
+                        message=SimpleNamespace(content='{"meals":'),
+                    )
+                ]
+            )
+
+    monkeypatch.setenv("GROQ_API_KEY", "mock-key")
+    monkeypatch.setattr(meal_planner, "AsyncGroq", FakeGroq)
+    with pytest.raises(meal_planner.ModelResponseError) as raised:
+        asyncio.run(
+            meal_planner.generate_meal_day(
+                profile,
+                targets,
+                3,
+                day_number=1,
+                recent_history=[],
+                budget_level=None,
+                cooking_time_minutes_max=None,
+            )
+        )
+
+    assert raised.value.truncated
+    assert attempts[0]["max_completion_tokens"] == 4000
+
+    repository = install_meal_mocks(monkeypatch)
+    stored = stored_profile(repository, profile)
+
+    async def truncated(*_args, **_kwargs):
+        raise raised.value
+
+    monkeypatch.setattr(meal_planner, "generate_meal_day", truncated)
+    response = client.post(
+        "/api/meal-plan/generate",
+        json={"profile_id": str(stored.profile_id)},
+    )
+    assert response.status_code == 502
+    assert response.json()["detail"] == (
+        "The meal planning model response was truncated; please retry."
+    )
 
 
 def test_model_rate_limit_retries_then_succeeds(monkeypatch):
@@ -670,10 +812,8 @@ def test_response_matches_schema_and_logs_exclude_profile_values(monkeypatch, ca
             cuisine_preferences=["private cuisine preference"],
         ),
     )
-    error = meal_planner.ModelResponseError("private model content")
-
     async def fail(*_args, **_kwargs):
-        raise error
+        raise meal_planner.ModelResponseError("private model content")
 
     monkeypatch.setattr(meal_planner, "generate_meal_day", fail)
     with caplog.at_level(logging.WARNING, logger=meal_planner_router.__name__):
@@ -682,9 +822,10 @@ def test_response_matches_schema_and_logs_exclude_profile_values(monkeypatch, ca
             json={"profile_id": str(profile.profile_id)},
         )
 
-    assert response.status_code == 502
+    assert response.status_code == 200
+    assert response.json()["status"] == "partial"
     assert "ModelResponseError" in caplog.text
-    assert str(profile.profile_id) in caplog.text
+    assert str(profile.profile_id) not in caplog.text
     assert "private cuisine preference" not in caplog.text
     assert "private model content" not in caplog.text
 

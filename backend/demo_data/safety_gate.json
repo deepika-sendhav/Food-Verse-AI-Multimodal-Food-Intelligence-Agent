@@ -1,0 +1,30 @@
+{
+  "success": true,
+  "status": "professional_review_required",
+  "plan_type": "daily",
+  "targets": {
+    "calories": null,
+    "protein_g": null,
+    "carbs_g": null,
+    "fats_g": null,
+    "fiber_g": null,
+    "hydration_ml": null,
+    "notes": []
+  },
+  "days": [],
+  "weekly_report": null,
+  "general_outline_type": null,
+  "general_outline": [],
+  "adaptive_suggestions": [],
+  "warnings": ["The sample profile is in a professional-review safety gate."],
+  "failed_days": [],
+  "safety_flags": [
+    {
+      "code": "demo_professional_review",
+      "message": "This sample demonstrates that personalized targets are withheld when professional review is needed.",
+      "severity": "warning"
+    }
+  ],
+  "disclaimers": ["This synthetic example is not health advice."],
+  "alert_level": "warning"
+}

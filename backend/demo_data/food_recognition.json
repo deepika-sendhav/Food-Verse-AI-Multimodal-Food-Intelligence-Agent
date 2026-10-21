@@ -1,0 +1,26 @@
+{
+  "success": true,
+  "dish_name": "Lentil and herb bowl",
+  "detected_items": ["lentils", "brown rice", "spinach", "tomato"],
+  "confidence": null,
+  "description": "A warm grain bowl with lentils, greens, tomato, and fresh herbs.",
+  "uncertainties": ["Portion size is estimated from the sample image."],
+  "nutrition": {
+    "serving_size_g": 320,
+    "serving_description": "Approx. 1 bowl (320 g)",
+    "calories_kcal": 410,
+    "protein_g": 19,
+    "carbs_g": 68,
+    "fats_g": 8,
+    "fiber_g": 14,
+    "sugar_g": 6,
+    "source": "Demonstration estimate; not measured from an upload",
+    "serving_size_is_assumed": true,
+    "uncertainties": ["Values vary by recipe and portion."]
+  },
+  "health_score": 82,
+  "health_label": "Balanced",
+  "reasoning": "The sample combines legumes, whole grains, and vegetables.",
+  "insights": ["Good source of plant protein and fiber."],
+  "alternatives": ["Try quinoa in place of brown rice."]
+}

@@ -82,6 +82,8 @@ class NutritionInfo(BaseModel):
 
 class FoodAnalysisResponse(BaseModel):
     success: bool
+    demo: bool = Field(default=False, exclude_if=lambda value: not value)
+    demo_warning: str | None = Field(default=None, exclude_if=lambda value: value is None)
     dish_name: str | None
     detected_items: list[str]
     confidence: float | None = Field(
@@ -154,6 +156,8 @@ class FreshnessRuleAssessment(BaseModel):
 
 class FreshnessAnalysisResponse(BaseModel):
     success: bool
+    demo: bool = Field(default=False, exclude_if=lambda value: not value)
+    demo_warning: str | None = Field(default=None, exclude_if=lambda value: value is None)
     item_name: str | None = None
     freshness_level: Literal[
         "fresh",
@@ -263,6 +267,8 @@ class HygieneCategoryEvidenceCoverage(BaseModel):
 
 class HygieneAnalysisResponse(BaseModel):
     success: bool
+    demo: bool = Field(default=False, exclude_if=lambda value: not value)
+    demo_warning: str | None = Field(default=None, exclude_if=lambda value: value is None)
     overall_score: float | None = Field(
         default=None, ge=0, le=100, allow_inf_nan=False
     )
@@ -360,6 +366,8 @@ class RecipeAllergens(BaseModel):
 
 class RecipeGenerationResponse(BaseModel):
     success: bool
+    demo: bool = Field(default=False, exclude_if=lambda value: not value)
+    demo_warning: str | None = Field(default=None, exclude_if=lambda value: value is None)
     status: RecipeStatus
     input_type: RecipeInputType
     interpreted_goal: str
@@ -609,7 +617,7 @@ class MealIngredient(BaseModel):
 
 
 class MealCandidate(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="ignore")
 
     dish_name: str = Field(min_length=1, max_length=150)
     description: str = Field(min_length=1, max_length=400)
@@ -621,15 +629,15 @@ class MealCandidate(BaseModel):
 
 
 class MealModelOutput(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="ignore")
 
     meal_slot: str = Field(min_length=1, max_length=40)
     meal: MealCandidate
-    alternatives: list[MealCandidate] = Field(min_length=2, max_length=2)
+    alternatives: list[MealCandidate] = Field(default_factory=list, max_length=2)
 
 
 class MealDayModelOutput(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="ignore")
 
     meals: list[MealModelOutput] = Field(min_length=1, max_length=6)
 
@@ -700,6 +708,8 @@ class WeeklyMealReport(BaseModel):
 
 class MealPlanResponse(BaseModel):
     success: bool
+    demo: bool = Field(default=False, exclude_if=lambda value: not value)
+    demo_warning: str | None = Field(default=None, exclude_if=lambda value: value is None)
     status: MealPlanStatus
     plan_type: MealPlanType
     targets: NutritionTargets

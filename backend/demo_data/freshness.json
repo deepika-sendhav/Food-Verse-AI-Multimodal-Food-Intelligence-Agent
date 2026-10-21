@@ -1,0 +1,50 @@
+{
+  "success": true,
+  "item_name": "Leafy greens",
+  "freshness_level": "moderately_fresh",
+  "confidence": 72,
+  "safety_status": "Visual cues appear generally acceptable; appearance cannot confirm food safety.",
+  "detected_signs": ["Mostly even green color", "Slight edge wilting"],
+  "reasoning": "This example combines visual-rule signals with a clearly synthetic sample assessment.",
+  "recommendation": "Inspect closely, wash appropriately, and follow storage guidance.",
+  "safety_warnings": ["Do not taste food to determine whether it is safe."],
+  "safety_disclaimer": "This visual estimate cannot detect pathogens or toxins. When in doubt, discard food and follow official food-safety guidance.",
+  "rule_assessment": {"score": 76, "signals": ["Low discoloration in the sample features"]},
+  "features": {
+    "feature_version": "demo-1",
+    "color": {
+      "mean_h": 48,
+      "std_h": 17,
+      "mean_s": 92,
+      "std_s": 24,
+      "mean_v": 154,
+      "std_v": 31,
+      "dominant_colors": [
+        {"red": 116, "green": 142, "blue": 72, "percentage": 63},
+        {"red": 190, "green": 157, "blue": 65, "percentage": 37}
+      ],
+      "consistency_score": 0.76
+    },
+    "dark_discoloration_fraction": 0.03,
+    "yellow_brown_fraction": 0.12,
+    "texture": {
+      "laplacian_variance": 142,
+      "local_standard_deviation": 23,
+      "smoothness_score": 0.68
+    },
+    "surface_patterns": {
+      "edge_density": 0.19,
+      "mold_like_pattern_fraction": 0.01
+    },
+    "quality_flags": {
+      "too_dark": false,
+      "too_bright": false,
+      "blurry": false,
+      "low_contrast": false
+    },
+    "warnings": ["Synthetic example features; not extracted from your upload."]
+  },
+  "uncertainties": ["Image-based checks cannot establish microbial safety."],
+  "color": "amber",
+  "alert_level": "warning"
+}

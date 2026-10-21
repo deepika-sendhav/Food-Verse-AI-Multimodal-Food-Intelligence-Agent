@@ -1,6 +1,8 @@
+import asyncio
+
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
-from backend.config import MAX_UPLOAD_SIZE_BYTES
+from backend.config import DEMO_MODE, MAX_UPLOAD_SIZE_BYTES
 from backend.schemas import FreshnessAnalysisResponse, FreshnessFeatures
 from backend.services.freshness_assessment import (
     assess_freshness_rules,
@@ -14,6 +16,7 @@ from backend.services.freshness_classifier import (
 )
 from backend.services.freshness_features import extract_freshness_features
 from backend.services.image_processing import InvalidImageError, preprocess_image
+from backend.services.demo_responses import load_demo_payload, load_demo_response
 
 router = APIRouter(prefix="/api/freshness", tags=["freshness features"])
 
@@ -57,9 +60,13 @@ def _invalid_image_error() -> HTTPException:
 async def extract_image_features(file: UploadFile = File(...)) -> FreshnessFeatures:
     try:
         image_bytes = await _read_upload(file)
+        if DEMO_MODE:
+            return FreshnessFeatures.model_validate(
+                load_demo_payload("freshness_features", FreshnessFeatures)
+            )
 
         try:
-            return extract_freshness_features(image_bytes)
+            return await asyncio.to_thread(extract_freshness_features, image_bytes)
         except InvalidImageError as exc:
             raise _invalid_image_error() from exc
     finally:
@@ -74,9 +81,13 @@ async def analyze_freshness(
 ) -> FreshnessAnalysisResponse:
     try:
         image_bytes = await _read_upload(file)
+        if DEMO_MODE:
+            return load_demo_response("freshness", FreshnessAnalysisResponse)
         try:
-            features = extract_freshness_features(image_bytes)
-            processed_image = preprocess_image(image_bytes)
+            features, processed_image = await asyncio.gather(
+                asyncio.to_thread(extract_freshness_features, image_bytes),
+                asyncio.to_thread(preprocess_image, image_bytes),
+            )
         except InvalidImageError as exc:
             raise _invalid_image_error() from exc
 
