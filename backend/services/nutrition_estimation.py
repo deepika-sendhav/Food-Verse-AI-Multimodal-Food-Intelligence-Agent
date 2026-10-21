@@ -273,6 +273,7 @@ async def _estimate_from_detected_items(
         Awaitable[tuple[str, dict[str, float | None]] | None],
     ]
     | None = None,
+    log_unmatched: bool = True,
 ) -> tuple[NutritionInfo, int | None, str | None, str, list[str], list[str]]:
     item_usda_lookup = usda_lookup or _fetch_usda_food
 
@@ -317,7 +318,8 @@ async def _estimate_from_detected_items(
         if reference is None:
             ignored_items.append(item_name)
             item_portions[item_name] = 100.0
-            logger.info("No nutrition reference match for food: %s", item_name)
+            if log_unmatched:
+                logger.info("No nutrition reference match for food: %s", item_name)
             continue
         _, entry, portion_g, reference_name = reference
         matched.append((item_name, entry, portion_g, reference_name))
@@ -621,6 +623,8 @@ async def estimate_nutrition(
     dish_name: str | None,
     detected_items: list[str],
     serving_size_g: float | None = None,
+    *,
+    log_unmatched: bool = True,
 ) -> tuple[NutritionInfo, int | None, str | None, str, list[str], list[str]]:
     has_dish_name = bool(dish_name and dish_name.strip())
     missing_dish_uncertainty = "The dish name was missing; detected food items were used instead."
@@ -685,7 +689,8 @@ async def estimate_nutrition(
                     assumed=serving_size_g is None,
                     uncertainty=uncertainty,
                 )
-            logger.info("No nutrition reference match for food: %s", item_name)
+            if log_unmatched:
+                logger.info("No nutrition reference match for food: %s", item_name)
             uncertainty.append(
                 f"No local or USDA reference was found for {item_name!r}; numeric nutrition values and health score are withheld."
             )
@@ -711,6 +716,7 @@ async def estimate_nutrition(
         multi_item_result = await _estimate_from_detected_items(
             detected_items,
             serving_size_g,
+            log_unmatched=log_unmatched,
         )
         multi_item_result[0].uncertainties.append(missing_dish_uncertainty)
         return multi_item_result
@@ -776,7 +782,8 @@ async def estimate_nutrition(
         )
 
     matched_name = dish_name
-    logger.info("No nutrition reference match for food: %s", dish_name)
+    if log_unmatched:
+        logger.info("No nutrition reference match for food: %s", dish_name)
     if len(detected_items) == 1:
         local_match = _find_local_food(detected_items[0])
         if local_match:
@@ -808,6 +815,7 @@ async def estimate_nutrition(
         multi_item_result = await _estimate_from_detected_items(
             detected_items,
             serving_size_g,
+            log_unmatched=log_unmatched,
             usda_lookup=(
                 _fetch_primary_usda_food if use_primary_produce_data else None
             ),
@@ -817,7 +825,8 @@ async def estimate_nutrition(
         return multi_item_result
 
     for item_name in detected_items:
-        logger.info("No nutrition reference match for food: %s", item_name)
+        if log_unmatched:
+            logger.info("No nutrition reference match for food: %s", item_name)
 
     uncertainty.append(
         f"No local reference was found for {matched_name!r}; numeric nutrition values and health score are withheld."

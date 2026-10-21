@@ -542,3 +542,174 @@ class UserProfileOptions(BaseModel):
     canonical_allergens: list[CanonicalAllergen]
     height_units: list[ProfileHeightUnit]
     weight_units: list[ProfileWeightUnit]
+
+
+MealPlanType = Literal["daily", "weekly"]
+MealPlanStatus = Literal["ok", "professional_review_required", "partial"]
+MealPlanBudget = Literal["low", "medium", "high"]
+MealPlanAlertLevel = Literal["none", "info", "warning", "critical"]
+MealNutritionSource = Literal["model_estimate", "computed"]
+
+
+class MealPlanRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    profile_id: UUID
+    plan_type: MealPlanType = "daily"
+    days: int = Field(default=7, ge=1, le=7)
+    meals_per_day: int | None = Field(default=None, ge=2, le=6)
+    budget_level: MealPlanBudget | None = None
+    cooking_time_minutes_max: int | None = Field(default=None, ge=5, le=120)
+    recent_history: list[Annotated[str, Field(min_length=1, max_length=100)]] = Field(
+        default_factory=list, max_length=14
+    )
+    weight_change_kg_per_week: float | None = Field(
+        default=None, ge=-2, le=2, allow_inf_nan=False
+    )
+    acknowledge_review: bool = False
+
+    @field_validator("recent_history", mode="before")
+    @classmethod
+    def clean_history(cls, value: object) -> object:
+        if value is None or not isinstance(value, list):
+            return value
+        return [_clean_profile_text(item) for item in value]
+
+
+class NutritionTargets(BaseModel):
+    calories: float | None = Field(default=None, ge=0, le=10000, allow_inf_nan=False)
+    protein_g: float | None = Field(default=None, ge=0, le=1000, allow_inf_nan=False)
+    carbs_g: float | None = Field(default=None, ge=0, le=2000, allow_inf_nan=False)
+    fats_g: float | None = Field(default=None, ge=0, le=1000, allow_inf_nan=False)
+    fiber_g: float | None = Field(default=None, ge=0, le=500, allow_inf_nan=False)
+    hydration_ml: int | None = Field(default=None, ge=0, le=20000)
+    notes: list[str] = Field(default_factory=list, max_length=20)
+
+
+class MealNutrition(BaseModel):
+    calories_kcal: float = Field(ge=0, le=10000, allow_inf_nan=False)
+    protein_g: float = Field(ge=0, le=1000, allow_inf_nan=False)
+    carbs_g: float = Field(ge=0, le=2000, allow_inf_nan=False)
+    fats_g: float = Field(ge=0, le=1000, allow_inf_nan=False)
+    fiber_g: float = Field(ge=0, le=500, allow_inf_nan=False)
+
+
+class DailyNutritionTotals(BaseModel):
+    calories_kcal: float = Field(ge=0, le=60000, allow_inf_nan=False)
+    protein_g: float = Field(ge=0, le=6000, allow_inf_nan=False)
+    carbs_g: float = Field(ge=0, le=12000, allow_inf_nan=False)
+    fats_g: float = Field(ge=0, le=6000, allow_inf_nan=False)
+    fiber_g: float = Field(ge=0, le=3000, allow_inf_nan=False)
+
+
+class MealIngredient(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    quantity_g: float | None = Field(default=None, ge=0, le=10000, allow_inf_nan=False)
+    notes: str | None = Field(default=None, max_length=250)
+
+
+class MealCandidate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    dish_name: str = Field(min_length=1, max_length=150)
+    description: str = Field(min_length=1, max_length=400)
+    ingredients: list[MealIngredient] = Field(min_length=1, max_length=40)
+    portion_size: str = Field(min_length=1, max_length=100)
+    prep_style: str = Field(min_length=1, max_length=100)
+    prep_time_minutes: int = Field(ge=0, le=1440)
+    estimated_nutrition: MealNutrition
+
+
+class MealModelOutput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    meal_slot: str = Field(min_length=1, max_length=40)
+    meal: MealCandidate
+    alternatives: list[MealCandidate] = Field(min_length=2, max_length=2)
+
+
+class MealDayModelOutput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    meals: list[MealModelOutput] = Field(min_length=1, max_length=6)
+
+
+class PlannedMeal(BaseModel):
+    meal_slot: str = Field(min_length=1, max_length=40)
+    status: Literal["available", "unavailable"]
+    dish_name: str | None = Field(default=None, max_length=150)
+    description: str | None = Field(default=None, max_length=400)
+    ingredients: list[MealIngredient] = Field(default_factory=list, max_length=40)
+    portion_size: str | None = Field(default=None, max_length=100)
+    prep_style: str | None = Field(default=None, max_length=100)
+    prep_time_minutes: int | None = Field(default=None, ge=0, le=1440)
+    estimated_nutrition: MealNutrition | None = None
+    nutrition_source: MealNutritionSource | None = None
+    nutrition_notes: list[str] = Field(default_factory=list, max_length=10)
+    alternatives: list[MealCandidate] = Field(default_factory=list, max_length=2)
+    unavailable_reason: str | None = Field(default=None, max_length=300)
+
+
+class MealTargetDifference(BaseModel):
+    calories_percent: float = Field(ge=-100, le=10000, allow_inf_nan=False)
+    protein_percent: float = Field(ge=-100, le=10000, allow_inf_nan=False)
+    carbs_percent: float = Field(ge=-100, le=10000, allow_inf_nan=False)
+    fats_percent: float = Field(ge=-100, le=10000, allow_inf_nan=False)
+    fiber_percent: float = Field(ge=-100, le=20000, allow_inf_nan=False)
+
+
+class DailyMealPlan(BaseModel):
+    day_number: int = Field(ge=1, le=7)
+    meals: list[PlannedMeal] = Field(max_length=6)
+    daily_totals: DailyNutritionTotals
+    target_difference_percent: MealTargetDifference
+
+
+class FailedPlanDay(BaseModel):
+    day_number: int = Field(ge=1, le=7)
+    reason: Literal[
+        "rate limited",
+        "timed out",
+        "service unavailable",
+        "invalid model response",
+        "service not configured",
+    ]
+
+
+class MealMacroBalance(BaseModel):
+    carbs: float = Field(ge=0, le=100, allow_inf_nan=False)
+    protein: float = Field(ge=0, le=100, allow_inf_nan=False)
+    fat: float = Field(ge=0, le=100, allow_inf_nan=False)
+
+
+class WeeklyMealReport(BaseModel):
+    average_daily_calories: float | None = Field(
+        default=None, ge=0, le=10000, allow_inf_nan=False
+    )
+    average_calories_difference_percent: float | None = Field(
+        default=None, allow_inf_nan=False
+    )
+    average_macro_balance: MealMacroBalance = Field(
+        default_factory=lambda: MealMacroBalance(carbs=0, protein=0, fat=0)
+    )
+    variety_score: float = Field(ge=0, le=1, allow_inf_nan=False)
+    days_within_10_percent_of_target: int = Field(ge=0, le=7)
+    concern_areas: list[str] = Field(default_factory=list)
+    highlights: list[str] = Field(default_factory=list)
+
+
+class MealPlanResponse(BaseModel):
+    success: bool
+    status: MealPlanStatus
+    plan_type: MealPlanType
+    targets: NutritionTargets
+    days: list[DailyMealPlan] = Field(default_factory=list, max_length=7)
+    weekly_report: WeeklyMealReport | None = None
+    general_outline_type: Literal["general_healthy_eating"] | None = None
+    general_outline: list[str] = Field(default_factory=list, max_length=10)
+    adaptive_suggestions: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    failed_days: list[FailedPlanDay] = Field(default_factory=list, max_length=7)
+    safety_flags: list[ProfileSafetyFlag] = Field(default_factory=list)
+    disclaimers: list[str] = Field(default_factory=list)
+    alert_level: MealPlanAlertLevel

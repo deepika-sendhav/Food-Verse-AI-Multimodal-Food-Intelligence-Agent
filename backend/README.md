@@ -327,3 +327,67 @@ multiple application processes.
 Profiles are self-reported and unverified. BMI is informational only,
 allergen matching is keyword-based and is not a guarantee, and this feature is
 not medical advice.
+
+## Personalized meal planning
+
+`POST /api/meal-plan/generate` accepts a JSON body containing a stored
+`profile_id` and optional `plan_type` (`daily` or `weekly`), `days` (1–7 for
+weekly plans), `meals_per_day` (2–6), `budget_level`, maximum cooking time
+(5–120 minutes), recent meal history (up to 14 entries), reported
+`weight_change_kg_per_week` (-2 to 2), and `acknowledge_review`. Health and
+allergy details come only from the stored profile; they cannot be supplied as
+raw endpoint fields. Missing or expired profiles return 404.
+
+The backend computes calorie and macro targets before requesting meal
+suggestions. BMR uses Mifflin-St Jeor: `10 × weight_kg + 6.25 × height_cm −
+5 × age_years`, then adds 5 for male sex or subtracts 161 for female sex.
+For `other` and `prefer_not_to_say`, the mean of both formula results is used.
+TDEE multiplies BMR by the activity factor: sedentary 1.2, light 1.375,
+moderate 1.55, active 1.725, or very active 1.9. Goal adjustments are 0% for
+maintain/eat healthier, −10% for weight loss (never beyond a 15% deficit),
++10% for weight gain, and +5% for building muscle. Estimated calories are
+floored at 1,200 kcal/day for female/other and 1,500 kcal/day for male.
+
+| Goal | Carbohydrates | Protein | Fat |
+| --- | ---: | ---: | ---: |
+| `maintain` | 50% | 20% | 30% |
+| `lose_weight` | 40% | 30% | 30% |
+| `gain_weight` | 50% | 20% | 30% |
+| `build_muscle` | 45% | 30% | 25% |
+| `eat_healthier` | 50% | 20% | 30% |
+
+Macro calories are converted to grams using 4 kcal/g for carbohydrate and
+protein and 9 kcal/g for fat. Fiber is estimated at 14 g per 1,000 kcal.
+Hydration is displayed as a general suggestion of about 30 ml/kg, rounded.
+These figures are rounded estimates, not prescriptions.
+
+Profiles requiring professional review—including anyone under 18—receive no
+calorie targets or personalized meal plan. If the user explicitly sets
+`acknowledge_review: true`, the response additionally provides only a
+`general_healthy_eating` outline without calorie goals or meal suggestions.
+Safety flags are passed through from the stored profile.
+
+The vision-capable text model proposes meals and two alternatives per meal;
+the backend verifies every candidate against strict profile exclusions,
+canonical allergen synonyms, and unrecognized allergies. A conflicting slot
+is requested again once; if it remains unsafe or unavailable, the slot is
+marked unavailable. When ingredient quantities are available, meal nutrition
+is cross-checked with the existing local/USDA nutrition estimator. A difference
+over 30% is flagged and available computed reference values are preferred.
+Daily totals, target differences, and adjustment suggestions are calculated in
+code. Weekly plans run day by day; failed days are listed while successful days
+are retained. The weekly report summarizes calorie alignment, macro balance,
+variety, and days within 10% of the calorie target.
+
+Adaptive suggestions recommend professional target review when reported
+weight change runs counter to the goal or exceeds 1 kg/week; faster weight loss
+never triggers a recommendation to cut calories further. Repeated recent dishes
+can also prompt a variety suggestion. Profile text and meal history are
+treated as untrusted prompt data and are not logged.
+
+All nutrition values are estimates. Profiles and weight changes are
+self-reported and unverified; allergen checks are keyword-based and are not a
+guarantee against cross-contact or hidden ingredients. Model nutrition
+estimates are approximate, and this feature is not medical or dietetic advice.
+Check every ingredient and consult a doctor or registered dietitian for
+individual health concerns.
